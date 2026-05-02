@@ -1,0 +1,54 @@
+---
+import type { CaseSummary } from '../lib/api.ts';
+
+interface Props {
+    cases: CaseSummary[];
+}
+
+const { cases } = Astro.props as Props;
+---
+
+{
+    cases.length === 0 ? (
+        <p class="mt-6 text-sm text-[color:var(--color-muted)]">No cases match filter.</p>
+    ) : (
+        <ul class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {cases.map((item) => (
+                <li class="rounded border border-[color:var(--color-border)] p-4">
+                    <div class="mb-2 flex items-center justify-between gap-2">
+                        <span class="rounded bg-gray-100 px-2 py-0.5 text-xs">{item.scenario}</span>
+                        <span
+                            class:list={[
+                                'rounded px-2 py-0.5 text-xs',
+                                item.sentiment === 'positive'
+                                    ? 'bg-green-100 text-green-700'
+                                    : 'bg-red-100 text-red-700'
+                            ]}
+                        >
+                            {item.sentiment}
+                        </span>
+                    </div>
+                    <div class="text-sm font-medium">{item.slug}</div>
+                    {
+                        item.quotes_from_user.length > 0 && (
+                            <div class="mt-1 line-clamp-1 text-xs text-[color:var(--color-muted)]">
+                                {item.quotes_from_user[0]}
+                            </div>
+                        )
+                    }
+                    {
+                        item.tags.style.length > 0 && (
+                            <div class="mt-2 flex flex-wrap gap-1">
+                                {item.tags.style.slice(0, 4).map((tag) => (
+                                    <span class="rounded border border-[color:var(--color-border)] bg-gray-50 px-1.5 py-0.5 text-[10px]">
+                                        {tag}
+                                    </span>
+                                ))}
+                            </div>
+                        )
+                    }
+                </li>
+            ))}
+        </ul>
+    )
+}

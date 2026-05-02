@@ -1,0 +1,86 @@
+---
+import CaseGrid from '../../components/CaseGrid.astro';
+import { CaseFilter } from '../../components/CaseFilter.tsx';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { fetchCases, fetchClients, type CaseSummary, type ClientMeta } from '../../lib/api.ts';
+
+const { slug = '' } = Astro.params;
+const scenarioParam = Astro.url.searchParams.get('scenario') ?? '';
+const sentimentParam = Astro.url.searchParams.get('sentiment');
+const sentiment = sentimentParam === 'positive' || sentimentParam === 'negative' ? sentimentParam : undefined;
+const scenario = scenarioParam || undefined;
+
+let client: ClientMeta | null = null;
+let cases: CaseSummary[] = [];
+let allClientCases: CaseSummary[] = [];
+let error: string | null = null;
+
+try {
+    const allClients = await fetchClients();
+    client = allClients.find((item) => item.slug === slug) ?? null;
+    const caseQuery: NonNullable<Parameters<typeof fetchCases>[0]> = { client: slug };
+    if (scenario) {
+        caseQuery.scenario = scenario;
+    }
+    if (sentiment) {
+        caseQuery.sentiment = sentiment;
+    }
+    cases = await fetchCases(caseQuery);
+    allClientCases = await fetchCases({ client: slug });
+} catch (cause: unknown) {
+    error = cause instanceof Error ? cause.message : String(cause);
+}
+
+const scenariosInClient = Array.from(new Set(allClientCases.map((item) => item.scenario))).sort();
+---
+
+<BaseLayout title={`Design Lab — ${client?.name ?? slug}`}>
+    <main class="mx-auto max-w-6xl p-8">
+        {
+            error && (
+                <div class="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+                    Sidecar error: {error}
+                </div>
+            )
+        }
+
+        {
+            client ? (
+                <header class="flex flex-wrap items-center gap-3">
+                    <span
+                        class="h-5 w-5 rounded-full border border-black/10"
+                        style={`background-color: ${client.theme_color}`}
+                    />
+                    <h1 class="text-2xl font-semibold">{client.name}</h1>
+                    <span
+                        class:list={[
+                            'rounded px-2 py-0.5 text-xs',
+                            client.type === 'self' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                        ]}
+                    >
+                        {client.type}
+                    </span>
+                    <span class="text-sm text-[color:var(--color-muted)]">{slug}</span>
+                </header>
+            ) : (
+                <header class="flex flex-wrap items-center gap-3">
+                    <h1 class="text-2xl font-semibold">{slug}</h1>
+                    <span class="text-sm text-[color:var(--color-muted)]">Client not found</span>
+                </header>
+            )
+        }
+
+        <CaseFilter
+            client:load
+            initialScenario={scenarioParam}
+            initialSentiment={sentiment ?? ''}
+            scenarios={scenariosInClient}
+        />
+
+        <CaseGrid cases={cases} />
+
+        <p class="mt-6 text-xs text-[color:var(--color-muted)]">
+            {cases.length} case{cases.length === 1 ? '' : 's'} shown{scenario || sentiment ? ' (filtered)' : ''}
+        </p>
+    </main>
+</BaseLayout>
