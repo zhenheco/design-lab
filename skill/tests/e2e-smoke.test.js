@@ -11,8 +11,22 @@ const SKILL_DIR = fileURLToPath(new URL('..', import.meta.url));
 function runScript(script, args = '', env = {}) {
     return execSync(`bash "${SKILL_DIR}/scripts/${script}" ${args}`, {
         encoding: 'utf8',
-        env: { ...process.env, ...env }
+        env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0', ...env }
     });
+}
+
+function withVaultEnv(vault, run) {
+    const previous = process.env.DESIGN_LAB_VAULT_PATH;
+    process.env.DESIGN_LAB_VAULT_PATH = vault;
+    try {
+        return run();
+    } finally {
+        if (previous === undefined) {
+            delete process.env.DESIGN_LAB_VAULT_PATH;
+        } else {
+            process.env.DESIGN_LAB_VAULT_PATH = previous;
+        }
+    }
 }
 
 test('E2E: init → schema check → stats on empty vault', () => {
@@ -35,14 +49,17 @@ test('E2E: write fake case via case-writer → stats reflects it', async () => {
     const fakeImg = join(vault, 'fake.png');
     writeFileSync(fakeImg, 'fake-png-bytes');
 
-    const { writeCase } = await import(join(SKILL_DIR, 'lib/case-writer.js'));
-    writeCase(vault, {
-        slug: 'test-stripe',
-        sentiment: 'positive',
-        scenario: 'landing',
-        quote: '測試',
-        sourceImagePath: fakeImg,
-        tokens: { palette: { primary: '#635BFF' } }
+    const { writeCase } = await import(join(SKILL_DIR, 'lib/case-writer.ts'));
+    withVaultEnv(vault, () => {
+        writeCase({
+            client: '_personal',
+            slug: 'test-stripe',
+            sentiment: 'positive',
+            scenario: 'landing',
+            quote: '測試',
+            sourceImagePath: fakeImg,
+            tokens: { palette: { primary: '#635BFF' } }
+        });
     });
 
     const statsOut = runScript('stats.sh', '', { DESIGN_LAB_VAULT_PATH: vault });

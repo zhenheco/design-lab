@@ -12,7 +12,8 @@ export function appendFeedback(vault, entry) {
     const logPath = join(vault, LOG_NAME);
     const record = {
         occurred_at: new Date().toISOString(),
-        ...entry
+        ...entry,
+        client: entry.client || '_personal'
     };
     appendFileSync(logPath, JSON.stringify(record) + '\n');
 }

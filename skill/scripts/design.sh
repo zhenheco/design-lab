@@ -20,19 +20,21 @@ echo "=== personal-style-guide.md ==="
 cat "$VAULT/personal-style-guide.md"
 echo ""
 echo "=== cases/ frontmatter summary ==="
-node --input-type=module -e "
-import { loadCaseSummaries } from '$SKILL_DIR/lib/case-loader.js';
-const all = loadCaseSummaries('$VAULT');
-console.log(JSON.stringify(all.map(c => ({
-    slug: c.slug,
-    scenario: c.scenario,
-    quotes: c.quotes_from_user,
-    tags: c.tags,
-    palette: c.tokens.palette
-})), null, 2));
-"
+V_PATH="$VAULT" S_PATH="$SKILL_DIR" node --import tsx --input-type=module -e "
+    import { join } from 'node:path';
+    import { loadCaseSummaries } from join(process.env.S_PATH, 'lib/case-loader.ts');
+    const all = loadCaseSummaries(process.env.V_PATH);
+    console.log(JSON.stringify(all.map(c => ({
+        client: c.client,
+        slug: c.slug,
+        scenario: c.scenario,
+        quotes: c.quotes_from_user,
+        tags: c.tags,
+        palette: c.tokens.palette
+    })), null, 2));
+" || exit 1
 
-CASE_COUNT=$(find "$VAULT/cases" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+CASE_COUNT=$(find "$VAULT/clients" -path "*/cases/*.md" 2>/dev/null | wc -l | tr -d ' ')
 echo ""
 echo "=== meta ==="
 echo "case_count: $CASE_COUNT"
