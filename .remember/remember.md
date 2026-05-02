@@ -20,20 +20,26 @@ design-lab v0.2 **pivoted** to sidecar architecture mid-session after discoverin
 
 ## Next session — 從這裡開始
 
-### Step 1: 讀 sidecar spec
-`docs/superpowers/specs/2026-05-02-design-lab-v0.2-sidecar.md`
+### Step 1: 讀 sidecar spec + plan
+- spec: `docs/superpowers/specs/2026-05-02-design-lab-v0.2-sidecar.md`
+- plan: `docs/superpowers/plans/2026-05-02-design-lab-v0.2-sidecar.md`（commit `36f97c4`，998 行 / 27 task / 5 phase α-ε）
 
-### Step 2: 寫 sidecar v0.2 plan（取代既有 v0.2 plan）
-精簡版，5 phase（α/β/γ/δ/ε），總計約 25 task。仿原 plan TDD 形式。
-
-### Step 3: spike 驗證（plan 階段第一件事）
+### Step 2: spike 驗證（執行第一個 task 前必跑）
 **Open Design 是否會吃 SKILL.md 內 curl 命令？**
 - 讀 `/Volumes/500G/Claude Code Projects/open-design/apps/daemon/src/prompts/` 看 system prompt 拼裝
 - 確認 agent 會主動跑 shell command（curl）還是只生成 artifact
 - 若不行 → fallback 回 A1（fork + 改 daemon prompt assembly），這會變回 4-5 天 估算
 
-### Step 4: 執行 sidecar
-仿原 v0.2 plan 的 subagent-driven-development（Codex 實作 + Gemini review），但 task 數從 43 降到 ~25，工期從 10 天降到 3.5 天。
+### Step 3: 執行 sidecar plan
+用 `superpowers:subagent-driven-development`（Codex 實作 + Gemini review），27 task / 5 phase。
+從 Phase α2（schema_v2）開始 — α0/α1 已在前 session 完成（commits `4444062`、`ea30e36`）。
+
+### Step 4: 解 _index.json conflict
+`~/.claude/skills/auto-skill/knowledge-base/_index.json` 第 5/37/236 行有 git merge conflict marker (`<<<<<<<`/`=======`/`>>>>>>>`)。下個 session 解 conflict 時順便加我寫的新 entry：
+```json
+{"id": "brainstorm-prior-art-search", "file": "brainstorm-prior-art-search.md", "lines": 64, "summary": "brainstorm Q1 前強制 GitHub prior-art search，避免重複造輪子（2026-05-02 design-lab incident 教訓）"}
+```
+也更新 `~/.claude/skills/auto-skill/knowledge-base/INDEX.md` 加對應一行。
 
 ## Context to Load
 
@@ -69,3 +75,4 @@ tsconfig.json                                                    # 已建
 ## Memory written this session
 
 - `~/.claude/projects/-Volumes-500G-Claude-Code-Projects-Design-skill/memory/feedback_brainstorm_consensus.md` — brainstorm cross-review 共識直接做不問用戶（user feedback）
+- `~/.claude/skills/auto-skill/knowledge-base/brainstorm-prior-art-search.md` — **跨專案強制規則**：brainstorm Q1 前強制 GitHub prior-art search（user feedback 2026-05-02 evening：「之後用 brainstorm 要先找 github 看，不要重複造輪」）
