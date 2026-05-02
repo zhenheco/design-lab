@@ -585,6 +585,7 @@ const watcher = chokidar.watch([
   `${VAULT}/clients/**/anti-library/**/*.md`,
   `${VAULT}/clients/**/meta.yaml`,
   `${VAULT}/personal-style-guide.md`,
+  `${VAULT}/scenario-overrides/*.md`,    // 跨客戶共用 override 文件，對應 documents 表 kind='scenario-override'
 ], {
   ignoreInitial: true,
   awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 50 },
@@ -617,8 +618,13 @@ async function enqueueReindex(path: string) {
 
 Dashboard server 啟動：
 1. 讀 SQLite `index_meta.last_full_rebuild_at`
-2. 跑 `find ~/Documents/CC Cli/design-library/clients -name "*.md" -newer <last_rebuild>` 找未索引的檔
-3. 若 > 0 → 增量 reindex 那些 files
+2. 對所有監聽範圍跑 mtime 比對（與 §8.1 watch 範圍一致）：
+   ```bash
+   find "$VAULT/clients" \( -name '*.md' -o -name 'meta.yaml' \) -newer "$LAST_REBUILD"
+   find "$VAULT/scenario-overrides" -name '*.md' -newer "$LAST_REBUILD"
+   find "$VAULT" -maxdepth 1 -name 'personal-style-guide.md' -newer "$LAST_REBUILD"
+   ```
+3. 若 > 0 → 對每個檔跑增量 reindex（依 kind 寫進 cases / clients / documents 表）
 
 ## 9. 啟動 / 停止
 
