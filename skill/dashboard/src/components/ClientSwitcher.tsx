@@ -20,8 +20,9 @@ export function ClientSwitcher() {
                     return;
                 }
 
-                if (list.length > 0) {
-                    setSelected(list[0].slug);
+                const first = list[0];
+                if (first) {
+                    setSelected(first.slug);
                 }
             })
             .catch((cause: unknown) => {

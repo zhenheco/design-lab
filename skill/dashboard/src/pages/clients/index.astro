@@ -1,0 +1,156 @@
+---
+import { ClientCrudForm } from '../../components/ClientCrudForm.tsx';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { fetchClients, type ClientMeta } from '../../lib/api.ts';
+
+let clients: ClientMeta[] = [];
+let error: string | null = null;
+
+try {
+    clients = await fetchClients();
+} catch (cause: unknown) {
+    error = cause instanceof Error ? cause.message : String(cause);
+}
+
+const selfClients = clients.filter((client) => client.type === 'self');
+const externalClients = clients.filter((client) => client.type === 'client');
+---
+
+<BaseLayout title="Design Lab — Clients">
+    <main class="mx-auto max-w-5xl p-8">
+        <div class="flex items-center justify-between gap-4">
+            <h1 class="text-2xl font-semibold">Clients</h1>
+            <ClientCrudForm client:load />
+        </div>
+
+        {
+            error && (
+                <div class="mt-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+                    Sidecar error: {error}
+                </div>
+            )
+        }
+
+        <section class="mt-8">
+            <h2 class="mb-3 text-sm font-medium tracking-wider text-[color:var(--color-muted)] uppercase">
+                Self ({selfClients.length})
+            </h2>
+            {
+                selfClients.length === 0 ? (
+                    <p class="text-sm text-[color:var(--color-muted)]">No self clients yet.</p>
+                ) : (
+                    <ul class="space-y-2">
+                        {selfClients.map((client) => (
+                            <li class="flex items-center gap-3 rounded border border-[color:var(--color-border)] p-3">
+                                <span
+                                    class="h-4 w-4 rounded-full border border-black/10"
+                                    style={`background-color: ${client.theme_color}`}
+                                />
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-medium">{client.name}</span>
+                                        <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[color:var(--color-muted)]">
+                                            {client.type}
+                                        </span>
+                                    </div>
+                                    <div class="text-xs text-[color:var(--color-muted)]">
+                                        {client.slug} · {client.created_at}
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    data-action="edit"
+                                    data-slug={client.slug}
+                                    class="rounded border border-[color:var(--color-border)] px-3 py-1 text-sm hover:border-[color:var(--color-fg)]"
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    type="button"
+                                    data-action="archive"
+                                    data-slug={client.slug}
+                                    class="rounded border border-red-300 px-3 py-1 text-sm text-red-700 hover:bg-red-50"
+                                >
+                                    Archive
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                )
+            }
+        </section>
+
+        <section class="mt-8">
+            <h2 class="mb-3 text-sm font-medium tracking-wider text-[color:var(--color-muted)] uppercase">
+                Client ({externalClients.length})
+            </h2>
+            {
+                externalClients.length === 0 ? (
+                    <p class="text-sm text-[color:var(--color-muted)]">No external clients yet.</p>
+                ) : (
+                    <ul class="space-y-2">
+                        {externalClients.map((client) => (
+                            <li class="flex items-center gap-3 rounded border border-[color:var(--color-border)] p-3">
+                                <span
+                                    class="h-4 w-4 rounded-full border border-black/10"
+                                    style={`background-color: ${client.theme_color}`}
+                                />
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-medium">{client.name}</span>
+                                        <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[color:var(--color-muted)]">
+                                            {client.type}
+                                        </span>
+                                    </div>
+                                    <div class="text-xs text-[color:var(--color-muted)]">
+                                        {client.slug} · {client.created_at}
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    data-action="edit"
+                                    data-slug={client.slug}
+                                    class="rounded border border-[color:var(--color-border)] px-3 py-1 text-sm hover:border-[color:var(--color-fg)]"
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    type="button"
+                                    data-action="archive"
+                                    data-slug={client.slug}
+                                    class="rounded border border-red-300 px-3 py-1 text-sm text-red-700 hover:bg-red-50"
+                                >
+                                    Archive
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                )
+            }
+        </section>
+    </main>
+</BaseLayout>
+
+<script>
+    document.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+            return;
+        }
+
+        const action = target.getAttribute('data-action');
+        const slug = target.getAttribute('data-slug');
+        if (!action || !slug) {
+            return;
+        }
+
+        if (action === 'edit') {
+            window.dispatchEvent(new CustomEvent('design-lab:edit-client', { detail: { slug } }));
+            return;
+        }
+
+        if (action === 'archive') {
+            window.dispatchEvent(new CustomEvent('design-lab:archive-client', { detail: { slug } }));
+        }
+    });
+</script>

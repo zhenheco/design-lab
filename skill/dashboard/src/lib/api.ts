@@ -37,6 +37,63 @@ export async function fetchClients(): Promise<ClientMeta[]> {
     return Array.isArray(data.clients) ? data.clients : [];
 }
 
+async function readApiError(res: Response): Promise<string> {
+    const payload = await res.json().catch(() => ({ error: 'unknown' })) as { error?: string };
+    return payload.error || `HTTP ${res.status}`;
+}
+
+export async function createClient(input: {
+    slug: string;
+    name: string;
+    type: 'self' | 'client';
+    theme_color: string;
+    notes?: string;
+}): Promise<{ slug: string; metaPath: string }> {
+    const res = await fetch(`${SIDECAR_URL}/api/clients`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input)
+    });
+
+    if (!res.ok) {
+        throw new Error(await readApiError(res));
+    }
+
+    return res.json() as Promise<{ slug: string; metaPath: string }>;
+}
+
+export async function updateClient(
+    slug: string,
+    patch: {
+        name?: string;
+        type?: 'self' | 'client';
+        theme_color?: string;
+        notes?: string;
+    }
+): Promise<{ slug: string }> {
+    const res = await fetch(`${SIDECAR_URL}/api/clients/${encodeURIComponent(slug)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch)
+    });
+
+    if (!res.ok) {
+        throw new Error(await readApiError(res));
+    }
+
+    return res.json() as Promise<{ slug: string }>;
+}
+
+export async function archiveClient(slug: string): Promise<{ slug: string; archivePath: string }> {
+    const res = await fetch(`${SIDECAR_URL}/api/clients/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+
+    if (!res.ok) {
+        throw new Error(await readApiError(res));
+    }
+
+    return res.json() as Promise<{ slug: string; archivePath: string }>;
+}
+
 export async function fetchCases(opts?: CasesQuery): Promise<CaseSummary[]> {
     const params = new URLSearchParams();
     if (opts?.client) {
