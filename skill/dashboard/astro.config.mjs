@@ -8,7 +8,15 @@ export default defineConfig({
     adapter: node({ mode: 'middleware' }),
     integrations: [react()],
     vite: {
-        plugins: [tailwindcss()]
+        plugins: [tailwindcss()],
+        server: {
+            proxy: {
+                '/api': {
+                    target: 'http://127.0.0.1:5174',
+                    changeOrigin: true
+                }
+            }
+        }
     },
     server: { port: 4322 }
 });

@@ -1,10 +1,91 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { ClientSwitcher } from '../components/ClientSwitcher.tsx';
+import { computeStatsFromCases, fetchCases, fetchClients, type CaseSummary, type ClientMeta } from '../lib/api.ts';
+
+let clients: ClientMeta[] = [];
+let cases: CaseSummary[] = [];
+let error: string | null = null;
+
+try {
+    clients = await fetchClients();
+    cases = await fetchCases();
+} catch (cause: unknown) {
+    error = cause instanceof Error ? cause.message : String(cause);
+}
+
+const stats = computeStatsFromCases(cases);
+const recent = cases.slice(0, 6);
 ---
 
 <BaseLayout title="Design Lab — Overview">
-    <main class="p-8">
-        <h1 class="text-2xl font-semibold">Design Lab Dashboard</h1>
-        <p class="mt-2 text-[color:var(--color-muted)]">Phase δ1 scaffold smoke page.</p>
+    <main class="mx-auto max-w-5xl p-8">
+        <h1 class="text-2xl font-semibold">Overview</h1>
+
+        {
+            error && (
+                <div class="mt-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+                    Sidecar error: {error}
+                </div>
+            )
+        }
+
+        <section class="mt-6">
+            <h2 class="mb-2 text-sm font-medium tracking-wider text-[color:var(--color-muted)] uppercase">
+                Active client
+            </h2>
+            <ClientSwitcher client:load />
+        </section>
+
+        <section class="mt-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div class="rounded border border-[color:var(--color-border)] p-4">
+                <div class="text-xs text-[color:var(--color-muted)] uppercase">Positive</div>
+                <div class="mt-1 text-2xl font-semibold">{stats.totals.positive}</div>
+            </div>
+            <div class="rounded border border-[color:var(--color-border)] p-4">
+                <div class="text-xs text-[color:var(--color-muted)] uppercase">Negative</div>
+                <div class="mt-1 text-2xl font-semibold">{stats.totals.negative}</div>
+            </div>
+            <div class="rounded border border-[color:var(--color-border)] p-4">
+                <div class="text-xs text-[color:var(--color-muted)] uppercase">Clients</div>
+                <div class="mt-1 text-2xl font-semibold">{clients.length}</div>
+            </div>
+            <div class="rounded border border-[color:var(--color-border)] p-4">
+                <div class="text-xs text-[color:var(--color-muted)] uppercase">Scenarios</div>
+                <div class="mt-1 text-2xl font-semibold">{Object.keys(stats.byScenario).length}</div>
+            </div>
+        </section>
+
+        <section class="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div>
+                <h2 class="mb-2 text-sm font-medium tracking-wider text-[color:var(--color-muted)] uppercase">
+                    By client
+                </h2>
+                <ul class="space-y-1">
+                    {Object.entries(stats.byClient).map(([slug, count]) => (
+                        <li class="flex justify-between border-b border-[color:var(--color-border)]/50 py-1 text-sm">
+                            <span>{slug}</span>
+                            <span class="text-[color:var(--color-muted)]">{count}</span>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+
+            <div>
+                <h2 class="mb-2 text-sm font-medium tracking-wider text-[color:var(--color-muted)] uppercase">
+                    Recent cases
+                </h2>
+                <ul class="space-y-2">
+                    {recent.map((item) => (
+                        <li class="text-sm">
+                            <div class="font-medium">{item.slug}</div>
+                            <div class="text-xs text-[color:var(--color-muted)]">
+                                {item.client} - {item.scenario} - {item.sentiment}
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+        </section>
     </main>
 </BaseLayout>
