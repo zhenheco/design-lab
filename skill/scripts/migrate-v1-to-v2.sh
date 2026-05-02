@@ -23,15 +23,37 @@ has_root_markdown() {
     find "$dir" -maxdepth 1 -name '*.md' 2>/dev/null | head -1
 }
 
-if [ -f "$VAULT_ABS/clients/_personal/meta.yaml" ] && \
-   [ -z "$(has_root_markdown "$VAULT_ABS/cases")" ] && \
-   [ -z "$(has_root_markdown "$VAULT_ABS/anti-library")" ]; then
+count_root_markdown() {
+    local dir="$1"
+    if [ ! -d "$dir" ]; then
+        echo 0
+        return
+    fi
+    find "$dir" -maxdepth 1 -name '*.md' | wc -l | tr -d ' '
+}
+
+ALREADY_MIGRATED=0
+if [ -f "$VAULT_ABS/clients/_personal/meta.yaml" ]; then
+    ALREADY_MIGRATED=1
+fi
+
+NEW_CASES_COUNT="$(count_root_markdown "$VAULT_ABS/cases")"
+NEW_ANTI_LIBRARY_COUNT="$(count_root_markdown "$VAULT_ABS/anti-library")"
+NEW_FILES_COUNT=$((NEW_CASES_COUNT + NEW_ANTI_LIBRARY_COUNT))
+
+if [ "$ALREADY_MIGRATED" -eq 1 ] && [ "$NEW_FILES_COUNT" -eq 0 ]; then
     echo "OK: vault already migrated to v2 (skipping, no backup created)"
     exit 0
 fi
 
-echo "Backup created at: $BACKUP" >&2
-cp -R "$VAULT_ABS" "$BACKUP"
+if [ "$ALREADY_MIGRATED" -eq 0 ]; then
+    echo "Backup created at: $BACKUP" >&2
+    trap 'rm -rf "$BACKUP"' ERR
+    cp -R "$VAULT_ABS" "$BACKUP"
+    trap - ERR
+else
+    echo "Note: vault already migrated. Processing $NEW_FILES_COUNT new file(s) (no backup)." >&2
+fi
 
 mkdir -p \
     "$VAULT_ABS/clients/_personal/cases" \
@@ -87,6 +109,12 @@ while IFS= read -r -d '' file; do
         }
         {
             print
+        }
+        END {
+            if (in_frontmatter) {
+                print "ERROR: unterminated frontmatter in input" > "/dev/stderr"
+                exit 1
+            }
         }
     ' "$file" > "$file.tmp"
     mv "$file.tmp" "$file"

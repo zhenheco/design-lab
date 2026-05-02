@@ -102,15 +102,25 @@ test('migration: second run is idempotent', () => {
 
     const migratedCase = join(vault, 'clients', '_personal', 'cases', '0001.md');
     appendFileSync(migratedCase, '\nIDEMPOTENT-MARKER\n');
+    writeMarkdownFile(
+        join(vault, 'cases', '0003.md'),
+        'schema_version: 1\nslug: 0003\nscenario: checkout\nsentiment: positive\nquotes_from_user: ["清楚"]\n'
+    );
 
     const secondRun = runMigration(vault);
     const content = readFileSync(migratedCase, 'utf8');
+    const newContent = readFileSync(join(vault, 'clients', '_personal', 'cases', '0003.md'), 'utf8');
 
     assert.equal(secondRun.status, 0);
     assert.match(content, /IDEMPOTENT-MARKER/);
     assert.equal((content.match(/^schema_version: 2$/gm) ?? []).length, 1);
     assert.equal((content.match(/^client: _personal$/gm) ?? []).length, 1);
+    assert.ok(existsSync(join(vault, 'clients', '_personal', 'cases', '0003.md')));
+    assert.match(newContent, /^schema_version: 2$/m);
+    assert.match(newContent, /^client: _personal$/m);
     assert.equal(findBackupDirs(vault).length, 1);
+    assert.match(secondRun.stderr, /^Note:/m);
+    assert.match(secondRun.stderr, /no backup/i);
 });
 
 test('migration: backup directory created as sibling', () => {
@@ -125,4 +135,23 @@ test('migration: backup directory created as sibling', () => {
 
     const combinedOutput = `${result.stdout}\n${result.stderr}`;
     assert.match(combinedOutput, /[Bb]ackup.*v1-backup-/);
+});
+
+test('migration: corrupt frontmatter fails loudly and preserves completed backup', () => {
+    const vault = mkdtempSync(join(tmpdir(), 'dl-migrate-'));
+    mkdirSync(join(vault, 'cases'));
+    mkdirSync(join(vault, 'anti-library'));
+    writeFileSync(
+        join(vault, 'cases', '0099.md'),
+        '---\nschema_version: 1\nbroken-no-end\n'
+    );
+    writeMarkdownFile(join(vault, 'personal-style-guide.md'), 'schema_version: 2\n');
+
+    const result = runMigration(vault);
+    const backups = findBackupDirs(vault);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /unterminated frontmatter/i);
+    assert.equal(backups.length, 1);
+    assert.ok(existsSync(join(backups[0], 'cases', '0099.md')));
 });
