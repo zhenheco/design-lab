@@ -1,0 +1,17 @@
+{
+  "name": "design-lab",
+  "version": "0.1.0",
+  "description": "Personal brand design system Claude Code skill",
+  "type": "module",
+  "scripts": {
+    "test": "node --test skill/tests/",
+    "deploy": "bash deploy.sh"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "chalk": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
