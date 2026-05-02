@@ -11,6 +11,6 @@
     "resolveJsonModule": true,
     "isolatedModules": true
   },
-  "include": ["skill/lib/**/*", "skill/tests/**/*"],
+  "include": ["skill/lib/**/*", "skill/tests/**/*", "skill/sidecar/**/*"],
   "exclude": ["skill/dashboard", "node_modules"]
 }

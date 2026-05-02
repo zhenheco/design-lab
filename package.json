@@ -4,15 +4,17 @@
   "description": "Personal brand design system Claude Code skill",
   "type": "module",
   "scripts": {
-    "test": "node --test --import tsx \"skill/tests/**/*.test.{js,ts}\"",
+    "test": "node --test --import tsx \"skill/tests/**/*.test.{js,ts}\" \"skill/sidecar/tests/**/*.test.ts\"",
     "test:dashboard": "cd skill/dashboard && npm test",
     "test:e2e": "cd skill/dashboard && npm run test:e2e",
     "deploy": "bash deploy.sh"
   },
   "dependencies": {
+    "@types/express": "^4.17.21",
     "better-sqlite3": "^11.5.0",
     "chalk": "^5.3.0",
     "chokidar": "^4.0.1",
+    "express": "^4.21.0",
     "gray-matter": "^4.0.3",
     "js-yaml": "^3.14"
   },
@@ -20,8 +22,12 @@
     "@types/better-sqlite3": "^7.6.11",
     "@types/js-yaml": "^3.12.10",
     "@types/node": "^22.0.0",
+    "@types/supertest": "^6.0.2",
+    "supertest": "^7.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }
