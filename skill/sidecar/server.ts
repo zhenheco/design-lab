@@ -33,6 +33,10 @@ export function createApp(): Express {
     app.use('/api/style-guide', styleGuideRouter());
     app.use('/api/scenario-overrides', scenarioOverridesRouter());
     app.use('/api/context', contextRouter());
+    // δ1 scaffold: dashboard mount placeholder
+    // Dashboard handler can be mounted by the sidecar after the Astro app is built:
+    // import('../dashboard/dist/server/entry.mjs').then((m) => app.use(m.handler));
+    // Enable this in the later integration phase once the dashboard build is part of startup.
     app.use(errorHandler);
     return app;
 }

@@ -1,0 +1,28 @@
+---
+import '../styles/global.css';
+
+interface Props {
+    title?: string;
+}
+
+const { title = 'Design Lab Dashboard' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>{title}</title>
+    </head>
+    <body class="min-h-screen">
+        <header class="border-b border-[color:var(--color-border)] bg-white">
+            <div class="mx-auto flex max-w-5xl items-center px-8 py-4">
+                <span class="text-sm font-semibold tracking-[0.18em] text-[color:var(--color-accent)] uppercase">
+                    Design Lab
+                </span>
+            </div>
+        </header>
+        <slot />
+    </body>
+</html>
