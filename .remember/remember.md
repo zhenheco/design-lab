@@ -1,78 +1,136 @@
-# Handoff (2026-05-02 evening)
+# Handoff (2026-05-03 凌晨)
 
 ## State
 
-design-lab v0.2 **pivoted** to sidecar architecture mid-session after discovering [`nexu-io/open-design`](https://github.com/nexu-io/open-design)（13.7k⭐, Apache 2.0）已實作我們 v0.2 dashboard 80%。Cross-review (Claude+Gemini) 共識：不 fork core，sidecar daemon 解耦。
+design-lab v0.2 sidecar plan **Phase α complete** (tag `phase-alpha-complete`) + **β1 done** + **α hotfix done**。**52/52 npm test 全綠**。
 
-**Active spec:** `docs/superpowers/specs/2026-05-02-design-lab-v0.2-sidecar.md`（剛寫，~600 行精簡版）
+**Active spec**: `docs/superpowers/specs/2026-05-02-design-lab-v0.2-sidecar.md`
+**Active plan**: `docs/superpowers/plans/2026-05-02-design-lab-v0.2-sidecar.md`（27 task / 5 phase α-ε）
+**Spike resolved**: Open Design SKILL.md 內 curl 命令會被 agent 執行（confirmed 在 `apps/daemon/src/prompts/system.ts:146-150`），sidecar bridge skill 路線可行。
 
-**Superseded:** `docs/superpowers/specs/2026-05-02-design-lab-v0.2-design.md` 與 `docs/superpowers/plans/2026-05-02-design-lab-v0.2.md`（標頭已標 SUPERSEDED）
+## Commits（這次 session 6 個）
 
-**Phase A 已完成（保留為 sidecar foundation）:**
-- A0: `4444062` — package.json + tsconfig + tsx + better-sqlite3 + chokidar deps
-- A1: `ea30e36` — `skill/lib/paths.ts` + 6 tests（30/30 全綠）
-- pivot commit: `5ec35bc` — superseded markers
+| Commit | Phase | What |
+|---|---|---|
+| `25aab58` | α2 | bump schema to v2 + dynamic migration hint |
+| `69bc237` | α2 review | harden check-schema (bash 數字防呆 + mixed vault test) |
+| `4ce0bc7` | α3 | idempotent v1-to-v2 migration + docs |
+| `f049487` | α3 review | harden migrate (mixed-state + trap + awk END) |
+| `20b242d` | α4 | init-library v0.2 multi-client 結構 |
+| **TAG** | — | `phase-alpha-complete` at `20b242d` |
+| `f5bcf88` | β1 | case-loader.ts multi-client + retrieval scope union (8 tests) |
+| `b3ef026` | β1 review | harden case-loader (broken symlink try-catch + YAML inline comment) |
+| `8ff6a1b` | α hotfix | **vault path validation + atomic mkdir lock**（堵 destructive-qa 找到的 2 個 P0 BLOCKING）|
 
-**Fork:**
-- `https://github.com/zhenheco/open-design` (forked from nexu-io/open-design)
-- Cloned to `/Volumes/500G/Claude Code Projects/open-design/` (127MB)
-- 目前用途：未來加 `skills/design-memory-bridge/SKILL.md`（Phase ε）。**目前不主修 fork**
+## Test count history
+v0.1: 24 → α2: 32 → α3: 37 → α4: 38 → β1: 46 → β1 fix: 48 → α hotfix: 52
+
+## /test + /destructive-qa 已跑 (本 session)
+
+報告位置：
+- `e2e/test-skill/reports/2026-05-02-explore.md`（199 行 — backend skill /test adaptation）
+- `e2e/test-skill/reports/2026-05-02-destructive-qa.md`（backend CLI 10-attack 結果，找到 2 P0 BLOCKING 已 hotfix）
+
+Skill experience 已寫入：
+- `~/.claude/skills/auto-skill/experience/skill-test.md`（backend skill /test adaptation：Step 1-8 對應 + CLI Matrix Smoke + Internal Flow Verification + Pre-flight Risk Audit）
+- `~/.claude/skills/auto-skill/experience/skill-destructive-qa.md`（backend CLI 10-attack 清單 + M1-M4 meta-pattern translation）
+- `~/.claude/skills/auto-skill/experience/skill-codex-agent.md`（plan 漏寫範圍補進當前 commit + message 標明）
+- `~/.claude/skills/auto-skill/experience/skill-gemini-agent.md`（gemini-rotate 只吃 -p 不吃 -f）
 
 ## Next session — 從這裡開始
 
-### Step 1: 讀 sidecar spec + plan
-- spec: `docs/superpowers/specs/2026-05-02-design-lab-v0.2-sidecar.md`
-- plan: `docs/superpowers/plans/2026-05-02-design-lab-v0.2-sidecar.md`（commit `36f97c4`，998 行 / 27 task / 5 phase α-ε）
-
-### Step 2: spike 驗證（執行第一個 task 前必跑）
-**Open Design 是否會吃 SKILL.md 內 curl 命令？**
-- 讀 `/Volumes/500G/Claude Code Projects/open-design/apps/daemon/src/prompts/` 看 system prompt 拼裝
-- 確認 agent 會主動跑 shell command（curl）還是只生成 artifact
-- 若不行 → fallback 回 A1（fork + 改 daemon prompt assembly），這會變回 4-5 天 估算
-
-### Step 3: 執行 sidecar plan
-用 `superpowers:subagent-driven-development`（Codex 實作 + Gemini review），27 task / 5 phase。
-從 Phase α2（schema_v2）開始 — α0/α1 已在前 session 完成（commits `4444062`、`ea30e36`）。
-
-### Step 4: 解 _index.json conflict
-`~/.claude/skills/auto-skill/knowledge-base/_index.json` 第 5/37/236 行有 git merge conflict marker (`<<<<<<<`/`=======`/`>>>>>>>`)。下個 session 解 conflict 時順便加我寫的新 entry：
-```json
-{"id": "brainstorm-prior-art-search", "file": "brainstorm-prior-art-search.md", "lines": 64, "summary": "brainstorm Q1 前強制 GitHub prior-art search，避免重複造輪子（2026-05-02 design-lab incident 教訓）"}
-```
-也更新 `~/.claude/skills/auto-skill/knowledge-base/INDEX.md` 加對應一行。
-
-## Context to Load
-
-```
-docs/superpowers/specs/2026-05-02-design-lab-v0.2-sidecar.md   # active spec
-docs/superpowers/specs/2026-05-02-design-lab-design.md          # v0.1 base
-skill/lib/paths.ts                                               # Phase A1 已寫
-skill/lib/schema.js                                              # 要升 v2
-skill/lib/case-loader.js                                         # 要改寫 .ts (multi-client)
-skill/lib/case-writer.js                                         # 同上
-skill/scripts/init-library.sh                                    # 要升級 v0.2 結構
-package.json                                                     # 已升 v0.2.0-dev
-tsconfig.json                                                    # 已建
-/Volumes/500G/Claude Code Projects/open-design/skills/dashboard/SKILL.md  # bridge skill 範本
-/Volumes/500G/Claude Code Projects/open-design/apps/daemon/src/skills.ts   # skill 機制（249 行）
-/Volumes/500G/Claude Code Projects/open-design/apps/daemon/src/db.ts       # 7 表 schema（不 modify）
+### Step 1: 確認 baseline
+```bash
+cd "/Volumes/500G/Claude Code Projects/Design skill"
+npm test 2>&1 | tail -8
+# 預期 52/52 全綠
+git log --oneline -5
+# HEAD 應是 8ff6a1b
 ```
 
-## Key decisions
+### Step 2: Phase β 剩餘 5 task
 
-- **Path A2** (sidecar + bridge) over A1 (fork core)
-- Sidecar listen on **localhost:5174** (Open Design 用 5173)
-- Dashboard 4 page only（index/clients/[slug]/style-guide），不做 collect/feedback（Open Design 已有）
-- 不用 shadcn-ui（精簡，vanilla components）
-- design-skill repo 自己當 sidecar 宿主，不分 repo
+| Task | 估時 | 風險 | Dispatch prompt 必補 |
+|---|---|---|---|
+| **β2** `case-writer.ts` sentiment dispatch | 0.5 day | 低 | 不動 case-writer.js (β6 才刪) |
+| **β3** `client-loader.ts` + js-yaml dep | 0.5 day | **中** | js-yaml pin `^3.14` 跟 gray-matter indirect dep 一致（避免 dual install）|
+| **β4** `client-writer.ts` + theme palette validation | 0.5 day | 低 | 12-color THEME_COLOR_PALETTE 寫死在 lib/theme-palette.ts |
+| **β5** stats by-client + design.sh ts loader + feedback-log client | 0.5 day | **高** | **必修 e2e-smoke.test.js** — Test 2 (`Total cases: 1 positive`) 在 stats 改 multi-client 後必 fail，要選方案 B (改 e2e-smoke 用 case-writer.ts) |
+| **β6** 刪舊 .js + tag `phase-beta-complete` | 0.25 day | **高** | 7 個 caller chain（不只 plan 寫的 4 個 .js test，還含 6 個 .sh inline `node -e "import('...')"`，全要改成 `node --import tsx -e`）|
 
-## Open questions（plan 階段定）
+### Step 3: SKILL.md drift（α5 收尾遺漏）
 
-1. Open Design 的 SKILL.md prompt 內，agent 是否會主動跑 curl？(spike step 3)
-2. Dashboard 要不要 health check Open Design daemon？
-3. SaaS v0.4+ 路徑：sidecar 獨立成 cloud service vs PR 進 Open Design 加 plugin system
+`skill/SKILL.md` 仍是 v0.1 文案（行 7 寫 `# design-lab v0.1 MVP`、行 50 寫 `cases/<slug>.md`），但實際是 v0.2 結構。Phase ε3 task 才會 rewrite，但建議**β phase 開始前**加短 deprecation banner（≤5 行），避免 user 跑 SKILL.md 指引走錯。
 
-## Memory written this session
+### Step 4: 後續 phase（沒要求順序但記著）
 
-- `~/.claude/projects/-Volumes-500G-Claude-Code-Projects-Design-skill/memory/feedback_brainstorm_consensus.md` — brainstorm cross-review 共識直接做不問用戶（user feedback）
-- `~/.claude/skills/auto-skill/knowledge-base/brainstorm-prior-art-search.md` — **跨專案強制規則**：brainstorm Q1 前強制 GitHub prior-art search（user feedback 2026-05-02 evening：「之後用 brainstorm 要先找 github 看，不要重複造輪」）
+- **γ** SQLite + chokidar + sidecar daemon (1 day)
+- **δ** Dashboard 4 page (1 day)
+- **ε** Bridge skill + 啟動整合 (0.5 day) → tag `v0.2.0`
+
+## β2-β6 Pre-flight Risk 詳細（出自 /test 報告）
+
+**Risk 1 (β6)**: 7 個 caller chain（plan 漏寫 6 個 .sh inline import）
+- `case-loader.js` → `tests/case-loader.test.js` + `scripts/design.sh:24`
+- `case-writer.js` → `tests/case-writer.test.js` + `tests/e2e-smoke.test.js:38` + `scripts/collect.sh:38`
+- `stats.js` → `tests/stats.test.js` + `scripts/stats.sh:9`
+- `feedback-log.js` → `tests/feedback-log.test.js` + `scripts/feedback.sh:18`
+- `schema.js` → `scripts/check-schema.sh:10` (`node -e "import('...')"`)
+- `lint.js` → `scripts/lint.sh:15`
+- `last-artifact.js` → `scripts/design.sh:54`
+- bash inline 跑 .ts 必須 `node --import tsx -e "..."` 而非 `node -e "..."`
+
+**Risk 2 (β5)**: e2e-smoke.test.js 流程 `init → case-writer 寫 root cases/ → stats 看 Total cases: 1`
+- β5 改 stats 多 multi-client 後 → stats 改吃 _personal/cases/ → case-writer.js 仍寫 root cases/ → 必 fail
+- 採方案 B：β5 一併改 e2e-smoke 用 case-writer.ts（最小擴張）
+
+**Risk 3 (β3)**: package.json 沒 js-yaml 直接 dep，但 node_modules 有 gray-matter@4 indirect 帶的 js-yaml@3
+- β3 加 `js-yaml@^3.14` (跟 gray-matter 一致) + `@types/js-yaml@^3`，避免 dual install / type 衝突
+
+**Risk 4 (SKILL.md drift)**: v0.1 文案 vs v0.2 實作不符 — α5 收尾應補 banner（短期），ε3 完整 rewrite（長期）
+
+## 2 個 nice-to-have（不擋進 β）
+
+- **CLI Matrix Hole 1**: v1 vault 跑 init-library 默默升級結構，沒警告 → 用戶可能困惑
+- **CLI Matrix Hole 2**: check-schema 看不到 corrupt frontmatter（grep 不 care 閉合 marker）
+
+## Context to load (next session)
+
+```
+# Plan + spec
+docs/superpowers/plans/2026-05-02-design-lab-v0.2-sidecar.md  # task β2-β6
+docs/superpowers/specs/2026-05-02-design-lab-v0.2-sidecar.md
+
+# Phase α 已完成
+skill/lib/schema.js                # CURRENT_SCHEMA_VERSION = 2
+skill/scripts/check-schema.sh      # dynamic migration hint + bash 防呆
+skill/scripts/migrate-v1-to-v2.sh  # 含 vault path validation + atomic lock + idempotent + sibling backup
+skill/scripts/init-library.sh      # v0.2 結構
+skill/templates/{personal-style-guide,scenario-override,client-meta}.yaml
+skill/lib/case-loader.ts           # β1 done
+
+# β phase 要動
+skill/lib/case-writer.js           # β2 改寫 .ts
+skill/lib/feedback-log.js          # β5 加 client field
+skill/lib/stats.js                 # β5 改吃 case-loader.ts
+skill/scripts/design.sh            # β5 改 ts runtime（node --import tsx -e ...）
+skill/scripts/collect.sh / stats.sh / feedback.sh  # β6 改 .ts import path
+package.json                       # β3 加 js-yaml@^3.14
+
+# Reports（這 session 寫的）
+e2e/test-skill/reports/2026-05-02-explore.md
+e2e/test-skill/reports/2026-05-02-destructive-qa.md
+```
+
+## Key decisions confirmed
+
+- Path A2 (sidecar + bridge over fork core)
+- Sidecar `localhost:5174`, Open Design `localhost:5173`
+- Dashboard 4 page only，不用 shadcn
+- design-skill repo 自己當 sidecar 宿主
+- v1→v2 migration **idempotent + sibling backup + 不 double-backup + atomic lock + vault validation**
+
+## Open questions still open
+
+1. Dashboard health check Open Design daemon？（δ phase 再定）
+2. SaaS v0.4+ sidecar 獨立 cloud service vs PR 進 Open Design 加 plugin？（v0.4+ 才需決定）
