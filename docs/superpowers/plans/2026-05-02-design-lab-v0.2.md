@@ -1,5 +1,7 @@
 # design-lab v0.2 Implementation Plan
 
+> 🛑 **STATUS: SUPERSEDED** (2026-05-02 same day) — pivoted to fork `nexu-io/open-design` + extend with `design-memory` skill。Phase A0/A1 已完成的 commits 保留為 standalone lib。Phase A2+ 不執行。新 plan 在 `open-design` fork 內。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把 design-lab v0.1 升級為 v0.2 — 多客戶 schema + Astro local dashboard，取代 4 個 slash command（保留 `/design`、新增 `/design-dashboard`）。
