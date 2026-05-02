@@ -11,7 +11,7 @@ VAULT="${DESIGN_LAB_VAULT_PATH:-$HOME/Documents/CC Cli/design-library}"
 
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# 互動: 詢問 minimal mode 4 個欄位
+# 互動: 詢問 minimal mode 欄位
 read -p "Sentiment? (positive/negative) [positive]: " SENTIMENT
 SENTIMENT="${SENTIMENT:-positive}"
 
@@ -26,6 +26,9 @@ DEFAULT_SLUG=$(basename "$IMAGE" | sed 's/\.[^.]*$//' | tr '[:upper:]' '[:lower:
 read -p "Slug [$DEFAULT_SLUG]: " SLUG
 SLUG="${SLUG:-$DEFAULT_SLUG}"
 
+read -p "Client? [_personal]: " CLIENT
+CLIENT="${CLIENT:-_personal}"
+
 # v0.1 tokens 抽取靠 Claude vision（在 SKILL.md 指示 Claude 看完圖把 tokens 結構化丟進 stdin）
 # 這個 script 從 stdin 讀 tokens JSON（如果有），否則用空值
 echo "請貼 tokens JSON（Claude 看完圖後產出，省略則留空）："
@@ -34,10 +37,11 @@ TOKENS_JSON=$(cat || echo '{}')
 TOKENS_JSON="${TOKENS_JSON:-{\}}"
 
 # 呼叫 case-writer
-node --input-type=module -e "
-import { writeCase } from '$SKILL_DIR/lib/case-writer.js';
+DESIGN_LAB_VAULT_PATH="$VAULT" node --import tsx --input-type=module -e "
+import { writeCase } from '$SKILL_DIR/lib/case-writer.ts';
 const tokens = JSON.parse(process.argv[1] || '{}');
-const result = writeCase('$VAULT', {
+const result = writeCase({
+    client: '$CLIENT',
     slug: '$SLUG',
     sentiment: '$SENTIMENT',
     scenario: '$SCENARIO',
