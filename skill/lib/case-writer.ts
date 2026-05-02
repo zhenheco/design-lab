@@ -1,6 +1,6 @@
 import matter from 'gray-matter';
-import { writeFileSync, mkdirSync, copyFileSync, existsSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { writeFileSync, mkdirSync, copyFileSync, existsSync, statSync } from 'node:fs';
+import { join, extname, resolve, sep } from 'node:path';
 import {
     getClientDir,
     getCasePath,
@@ -51,6 +51,12 @@ export function writeCase(input: WriteCaseInput): WriteCaseResult {
     }
 
     assertSafePath(casePath);
+    const resolvedClientDir = resolve(clientDir);
+    const resolvedCasePath = resolve(casePath);
+    const clientDirPrefix = `${resolvedClientDir}${sep}`;
+    if (resolvedCasePath !== resolvedClientDir && !resolvedCasePath.startsWith(clientDirPrefix)) {
+        throw new Error(`case path escaped client dir: ${casePath}`);
+    }
 
     const targetDir = input.sentiment === 'positive' ? join(clientDir, 'cases') : join(clientDir, 'anti-library');
     mkdirSync(targetDir, { recursive: true });
@@ -61,8 +67,20 @@ export function writeCase(input: WriteCaseInput): WriteCaseResult {
 
     const snapshotName = `snapshot${extname(input.sourceImagePath)}`;
     const snapshotPath = join(assetsDir, snapshotName);
-    if (existsSync(input.sourceImagePath)) {
+    let snapshotMarkdown = '';
+    let canSnapshot = false;
+    try {
+        canSnapshot = existsSync(input.sourceImagePath) && statSync(input.sourceImagePath).isFile();
+    } catch (err: unknown) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code !== 'ENOENT') {
+            throw err;
+        }
+    }
+
+    if (canSnapshot) {
         copyFileSync(input.sourceImagePath, snapshotPath);
+        snapshotMarkdown = `## 截圖\n\n![[${input.slug}/${snapshotName}]]\n\n`;
     }
 
     const frontmatter = {
@@ -80,9 +98,16 @@ export function writeCase(input: WriteCaseInput): WriteCaseResult {
         lint_skip: []
     };
 
-    const body = `\n## 為什麼${input.sentiment === 'positive' ? '喜歡' : '不喜歡'}\n\n${input.quote}\n\n## 截圖\n\n![[${input.slug}/${snapshotName}]]\n\n## 解構觀察\n\n（事後在 Obsidian 補）\n`;
+    const body = `\n## 為什麼${input.sentiment === 'positive' ? '喜歡' : '不喜歡'}\n\n${input.quote}\n\n${snapshotMarkdown}## 解構觀察\n\n（事後在 Obsidian 補）\n`;
 
-    writeFileSync(casePath, matter.stringify(body, frontmatter));
+    try {
+        writeFileSync(casePath, matter.stringify(body, frontmatter), { flag: 'wx' });
+    } catch (err: unknown) {
+        if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+            throw new Error(`case already exists: ${casePath}`);
+        }
+        throw err;
+    }
 
     return { casePath, assetsDir };
 }

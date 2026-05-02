@@ -113,6 +113,18 @@ test('duplicate slug in same sentiment rejects', () => {
     });
 });
 
+test('existing case file rejects with already exists error', () => {
+    const vault = setupVault(['_personal']);
+
+    withVaultEnv(vault, () => {
+        const casePath = join(vault, 'clients', '_personal', 'cases', 'same.md');
+        mkdirSync(join(vault, 'clients', '_personal', 'cases'), { recursive: true });
+        writeFileSync(casePath, 'preexisting');
+
+        assert.throws(() => writeCase(makeInput({ slug: 'same' })), /already exists/);
+    });
+});
+
 test('cross-folder duplicate slug rejects', () => {
     const vault = setupVault(['_personal']);
 
@@ -191,6 +203,7 @@ test('source image exists -> snapshot copy', () => {
 
     withVaultEnv(vault, () => {
         const fixture = withFixtureImage(vault);
+        const casePath = join(vault, 'clients', '_personal', 'cases', 'snap.md');
         writeCase(
             makeInput({
                 slug: 'snap',
@@ -199,6 +212,9 @@ test('source image exists -> snapshot copy', () => {
         );
 
         assert.ok(existsSync(join(vault, 'clients', '_personal', 'cases', 'snap', 'snapshot.png')));
+        const body = readBody(casePath);
+        assert.match(body, /## 截圖/);
+        assert.match(body, /!\[\[snap\/snapshot\.png\]\]/);
     });
 });
 
@@ -218,6 +234,51 @@ test('source image missing -> no copy and no throw', () => {
             existsSync(join(vault, 'clients', '_personal', 'cases', 'nosnap', 'snapshot.png')),
             false
         );
+        const body = readBody(result.casePath);
+        assert.doesNotMatch(body, /## 截圖/);
+        assert.doesNotMatch(body, /!\[\[/);
+    });
+});
+
+test('source image directory -> no copy and no snapshot block', () => {
+    const vault = setupVault(['_personal']);
+
+    withVaultEnv(vault, () => {
+        const sourceDir = join(vault, 'source-dir');
+        mkdirSync(sourceDir);
+
+        const result = writeCase(
+            makeInput({
+                slug: 'dirsnap',
+                sourceImagePath: sourceDir
+            })
+        );
+
+        assert.ok(existsSync(result.casePath));
+        assert.equal(
+            existsSync(join(vault, 'clients', '_personal', 'cases', 'dirsnap', 'snapshot')),
+            false
+        );
+        const body = readBody(result.casePath);
+        assert.doesNotMatch(body, /## 截圖/);
+        assert.doesNotMatch(body, /!\[\[/);
+    });
+});
+
+test('writes only within selected client subtree', () => {
+    const vault = setupVault(['clienta', 'clientb']);
+
+    withVaultEnv(vault, () => {
+        const result = writeCase(
+            makeInput({
+                client: 'clientb',
+                slug: 'scoped'
+            })
+        );
+
+        assert.match(result.casePath, /clients\/clientb\//);
+        assert.ok(existsSync(join(vault, 'clients', 'clientb', 'cases', 'scoped.md')));
+        assert.equal(existsSync(join(vault, 'clients', 'clienta', 'cases', 'scoped.md')), false);
     });
 });
 
