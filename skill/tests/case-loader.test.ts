@@ -1,6 +1,6 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { computeRetrievalScope, loadCaseSummaries, type ClientRef } from '../lib/case-loader.ts';
@@ -298,5 +298,70 @@ test('computeRetrievalScope: supports full union, self union, dedupe, and unknow
     assert.equal(
         computeRetrievalScope('_personal', clients).filter((slug) => slug === '_personal').length,
         1
+    );
+});
+
+test('loadCaseSummaries: broken symlink in clients is warned and skipped', () => {
+    const vault = setupVault([
+        {
+            slug: '_personal',
+            type: 'self',
+            cases: [{ slug: '0001', scenario: 'landing', sentiment: 'positive' }]
+        }
+    ]);
+    const clientsDir = join(vault, 'clients');
+    symlinkSync('/nonexistent/path', join(clientsDir, 'broken-symlink'), 'dir');
+    const warn = mock.method(console, 'warn', () => {});
+
+    try {
+        const summaries = loadCaseSummaries(vault);
+
+        assert.deepEqual(
+            summarizeCases(summaries.map((entry) => entry.slug)),
+            ['0001']
+        );
+        assert.ok(warn.mock.calls.length >= 1);
+        assert.ok(
+            warn.mock.calls.some((call) => {
+                const message = String(call.arguments[0]);
+                return message.includes('cannot stat') && message.includes('broken-symlink');
+            })
+        );
+    } finally {
+        warn.mock.restore();
+    }
+});
+
+test('loadCaseSummaries: meta.yaml inline comments preserve client type parsing', () => {
+    const vault = setupVault([
+        {
+            slug: '_personal',
+            type: 'self',
+            cases: [{ slug: '0001', scenario: 'landing', sentiment: 'positive' }]
+        },
+        {
+            slug: 'aicycle',
+            withMeta: false,
+            cases: [{ slug: 'a-001', scenario: 'landing', sentiment: 'positive' }]
+        }
+    ]);
+    const aicycleDir = join(vault, 'clients', 'aicycle');
+    writeFileSync(
+        join(aicycleDir, 'meta.yaml'),
+        [
+            'schema_version: 2',
+            'slug: aicycle # this is the brand',
+            'type: client # external client',
+            'notes: ""',
+            'theme_color: "#1F2937"',
+            ''
+        ].join('\n')
+    );
+
+    const summaries = loadCaseSummaries(vault, { client: 'aicycle' });
+
+    assert.deepEqual(
+        summarizeCases(summaries.map((entry) => `${entry.slug}:${entry.client}`)),
+        ['0001:_personal', 'a-001:aicycle']
     );
 });

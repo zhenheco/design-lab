@@ -46,7 +46,15 @@ function parseMinimalYaml(content: string): MetaParseResult {
         }
 
         const [, key, rawValue] = match;
-        const value = rawValue.replace(/^["']|["']$/g, '');
+        const isQuoted =
+            (rawValue.startsWith('"') && rawValue.endsWith('"')) ||
+            (rawValue.startsWith("'") && rawValue.endsWith("'"));
+        const value = isQuoted
+            ? rawValue.slice(1, -1)
+            : (() => {
+                  const commentIdx = rawValue.indexOf('#');
+                  return (commentIdx >= 0 ? rawValue.slice(0, commentIdx) : rawValue).trim();
+              })();
         if (key === 'slug') {
             result.slug = value;
         }
@@ -90,7 +98,15 @@ function loadAllClientRefs(vault: string): ClientRef[] {
         }
 
         const clientDir = join(clientsDir, entry);
-        if (!statSync(clientDir).isDirectory()) {
+        let dirStat: ReturnType<typeof statSync>;
+        try {
+            dirStat = statSync(clientDir);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.warn(`[case-loader] skip client '${entry}': cannot stat (${message})`);
+            continue;
+        }
+        if (!dirStat.isDirectory()) {
             continue;
         }
 
