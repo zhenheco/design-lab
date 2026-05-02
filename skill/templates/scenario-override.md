@@ -1,5 +1,5 @@
 ---
-schema_version: 1
+schema_version: 2
 parent: personal-style-guide.md
 scenario: SCENARIO_NAME
 ---

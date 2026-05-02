@@ -1,5 +1,5 @@
 ---
-schema_version: 1
+schema_version: 2
 version: 1
 updated: 2026-05-02
 distilled_from_cases: 0

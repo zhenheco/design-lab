@@ -21,7 +21,7 @@ test('E2E: init → schema check → stats on empty vault', () => {
     assert.ok(existsSync(join(vault, 'personal-style-guide.md')));
 
     const checkOut = runScript('check-schema.sh', `"${vault}"`);
-    assert.match(checkOut, /OK: schema v1/);
+    assert.match(checkOut, /OK: schema v2/);
 
     const statsOut = runScript('stats.sh', '', { DESIGN_LAB_VAULT_PATH: vault });
     assert.match(statsOut, /Total cases: 0/);

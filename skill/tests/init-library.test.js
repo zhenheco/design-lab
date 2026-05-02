@@ -22,11 +22,11 @@ test('init-library: creates expected directory tree', () => {
     assert.ok(existsSync(join(vault, 'candidates')));
 });
 
-test('init-library: personal-style-guide has schema_version=1', () => {
+test('init-library: personal-style-guide has schema_version=2', () => {
     const vault = mkdtempSync(join(tmpdir(), 'dl-init-'));
     execSync(`bash "${SCRIPT}" "${vault}"`, { encoding: 'utf8' });
     const content = readFileSync(join(vault, 'personal-style-guide.md'), 'utf8');
-    assert.match(content, /schema_version: 1/);
+    assert.match(content, /schema_version: 2/);
     assert.match(content, /## DO/);
     assert.match(content, /## NEVER/);
     assert.match(content, /## SOMETIMES/);

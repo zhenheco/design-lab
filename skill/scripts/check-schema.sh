@@ -25,7 +25,7 @@ if [ "$OLDEST" -eq "$CURRENT" ]; then
     exit 0
 elif [ "$OLDEST" -lt "$CURRENT" ]; then
     echo "MIGRATION_NEEDED: vault has v$OLDEST, skill expects v$CURRENT" >&2
-    echo "Run: bash $SKILL_DIR/scripts/migrate.sh \"$VAULT\"" >&2
+    echo "Run: bash $SKILL_DIR/scripts/migrate-v${OLDEST}-to-v${CURRENT}.sh \"$VAULT\"" >&2
     exit 2
 else
     echo "ERROR: vault schema v$OLDEST > skill v$CURRENT (downgrade not supported)" >&2

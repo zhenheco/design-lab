@@ -14,15 +14,32 @@ test('check-schema: empty vault passes', () => {
     assert.match(out, /OK: schema v\d+ \(no files yet\)/);
 });
 
-test('check-schema: vault with schema_version=1 passes', () => {
+test('check-schema: vault with schema_version=2 passes', () => {
+    const vault = mkdtempSync(join(tmpdir(), 'dl-vault-'));
+    mkdirSync(join(vault, 'cases'));
+    writeFileSync(join(vault, 'cases', '0001.md'), '---\nschema_version: 2\n---\nbody');
+    const out = execSync(`bash "${SCRIPT}" "${vault}"`, { encoding: 'utf8' });
+    assert.match(out, /OK: schema v2/);
+});
+
+test('check-schema: vault with schema_version=1 prompts migration to v2', () => {
     const vault = mkdtempSync(join(tmpdir(), 'dl-vault-'));
     mkdirSync(join(vault, 'cases'));
     writeFileSync(join(vault, 'cases', '0001.md'), '---\nschema_version: 1\n---\nbody');
-    const out = execSync(`bash "${SCRIPT}" "${vault}"`, { encoding: 'utf8' });
-    assert.match(out, /OK: schema v1/);
+    let exitCode = 0;
+    let stderr = '';
+    try {
+        execSync(`bash "${SCRIPT}" "${vault}"`, { encoding: 'utf8', stdio: 'pipe' });
+    } catch (e) {
+        exitCode = e.status;
+        stderr = e.stderr.toString();
+    }
+    assert.equal(exitCode, 2);
+    assert.match(stderr, /MIGRATION_NEEDED.*v1.*v2/);
+    assert.match(stderr, /migrate-v1-to-v2\.sh/);
 });
 
-test('check-schema: vault with schema_version=0 (older) fails with migration prompt', () => {
+test('check-schema: vault with schema_version=0 prompts migration to v2', () => {
     const vault = mkdtempSync(join(tmpdir(), 'dl-vault-'));
     mkdirSync(join(vault, 'cases'));
     writeFileSync(join(vault, 'cases', '0001.md'), '---\nschema_version: 0\n---\nbody');
@@ -35,5 +52,6 @@ test('check-schema: vault with schema_version=0 (older) fails with migration pro
         stderr = e.stderr.toString();
     }
     assert.equal(exitCode, 2);
-    assert.match(stderr, /MIGRATION_NEEDED.*v0.*v1/);
+    assert.match(stderr, /MIGRATION_NEEDED.*v0.*v2/);
+    assert.match(stderr, /migrate-v0-to-v2\.sh/);
 });
