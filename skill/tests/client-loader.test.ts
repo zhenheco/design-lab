@@ -133,6 +133,16 @@ test('loadClient: miss returns null', () => {
     assert.equal(client, null);
 });
 
+test('loadClient: special characters in quoted name are preserved', () => {
+    const vault = setupVault();
+    writeMeta(vault, 'aicycle', buildMetaYaml({ slug: 'aicycle', name: 'AICycle: 循環經濟', type: 'client' }));
+
+    const client = withVaultEnv(vault, () => loadClient('aicycle'));
+
+    assert.ok(client);
+    assert.equal(client.name, 'AICycle: 循環經濟');
+});
+
 test('loadAllClients: broken YAML is skipped and warns', () => {
     const vault = setupVault();
     writeMeta(vault, 'broken-yaml', 'slug: [unclosed\n');
@@ -261,6 +271,25 @@ test('loadClient: broken YAML returns null and warns', () => {
         assert.equal(warn.mock.calls.length, 1);
         assert.match(String(warn.mock.calls[0].arguments[0]), /broken-yaml/);
         assert.match(String(warn.mock.calls[0].arguments[0]), /meta\.yaml/);
+    } finally {
+        warn.mock.restore();
+    }
+});
+
+test('directory slug mismatch is skipped and warns', () => {
+    const vault = setupVault();
+    writeMeta(vault, 'aicycle', buildMetaYaml({ slug: 'zhenheco', name: 'Aicycle', type: 'client' }));
+    const warn = mock.method(console, 'warn', () => {});
+
+    try {
+        const clients = withVaultEnv(vault, () => loadAllClients());
+        const client = withVaultEnv(vault, () => loadClient('aicycle'));
+
+        assert.deepEqual(clients, []);
+        assert.equal(client, null);
+        assert.ok(
+            warn.mock.calls.some((call) => String(call.arguments[0]).includes('does not match meta.yaml slug'))
+        );
     } finally {
         warn.mock.restore();
     }

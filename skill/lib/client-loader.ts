@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import yaml from 'js-yaml';
-import { getClientMetaPath, getVaultPath, isValidSlug } from './paths.ts';
+import { getVaultPath, isValidSlug } from './paths.ts';
 
 export interface ClientMeta {
     schema_version: 2;
@@ -46,7 +46,7 @@ export function loadAllClients(vault?: string): ClientMeta[] {
         }
     }
 
-    return clients.sort((left, right) => left.slug.localeCompare(right.slug));
+    return clients.sort((left, right) => (left.slug < right.slug ? -1 : left.slug > right.slug ? 1 : 0));
 }
 
 export function loadClient(slug: string, vault?: string): ClientMeta | null {
@@ -84,7 +84,7 @@ function parseClientMeta(slug: string, vault: string): ClientMeta | null {
 }
 
 function resolveMetaPath(slug: string, vault: string): string {
-    return vault === getVaultPath() ? getClientMetaPath(slug) : join(vault, 'clients', slug, 'meta.yaml');
+    return join(vault, 'clients', slug, 'meta.yaml');
 }
 
 function validateMeta(slug: string, raw: unknown): ClientMeta | null {
@@ -119,6 +119,11 @@ function validateMeta(slug: string, raw: unknown): ClientMeta | null {
 
     if (!isValidSlug(metaSlug)) {
         console.warn(`[client-loader] ${slug}: missing or invalid field: slug`);
+        return null;
+    }
+
+    if (slug !== metaSlug) {
+        console.warn(`[client-loader] ${slug}: directory slug does not match meta.yaml slug ('${metaSlug}')`);
         return null;
     }
 
