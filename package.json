@@ -1,17 +1,25 @@
 {
   "name": "design-lab",
-  "version": "0.1.0",
+  "version": "0.2.0-dev",
   "description": "Personal brand design system Claude Code skill",
   "type": "module",
   "scripts": {
-    "test": "node --test \"skill/tests/*.test.js\"",
+    "test": "node --test --import tsx \"skill/tests/**/*.test.{js,ts}\"",
+    "test:dashboard": "cd skill/dashboard && npm test",
+    "test:e2e": "cd skill/dashboard && npm run test:e2e",
     "deploy": "bash deploy.sh"
   },
   "dependencies": {
     "gray-matter": "^4.0.3",
-    "chalk": "^5.3.0"
+    "chalk": "^5.3.0",
+    "better-sqlite3": "^11.5.0",
+    "chokidar": "^4.0.1"
   },
-  "engines": {
-    "node": ">=20"
-  }
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0",
+    "@types/better-sqlite3": "^7.6.11"
+  },
+  "engines": { "node": ">=20" }
 }
