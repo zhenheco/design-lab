@@ -9,9 +9,10 @@ VAULT="${1:?usage: $0 <vault-path>}"
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CURRENT=$(node -e "import('$SKILL_DIR/lib/schema.js').then(m => console.log(m.CURRENT_SCHEMA_VERSION))")
 
-# 找所有 markdown 的最小 schema_version
+# 找所有 markdown 的最小 schema_version（只接受純非負整數，防 quoted/text value 讓 -eq 比較炸）
 OLDEST=$(grep -rh "^schema_version:" "$VAULT" 2>/dev/null \
     | awk '{print $2}' \
+    | grep -E '^[0-9]+$' \
     | sort -n \
     | head -1 || true)
 

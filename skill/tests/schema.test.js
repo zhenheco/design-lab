@@ -39,6 +39,24 @@ test('check-schema: vault with schema_version=1 prompts migration to v2', () => 
     assert.match(stderr, /migrate-v1-to-v2\.sh/);
 });
 
+test('check-schema: mixed v1 + v2 vault prompts migration to v2', () => {
+    const vault = mkdtempSync(join(tmpdir(), 'dl-vault-'));
+    mkdirSync(join(vault, 'cases'));
+    writeFileSync(join(vault, 'cases', '0001.md'), '---\nschema_version: 1\n---\nold');
+    writeFileSync(join(vault, 'cases', '0002.md'), '---\nschema_version: 2\n---\nnew');
+    let exitCode = 0;
+    let stderr = '';
+    try {
+        execSync(`bash "${SCRIPT}" "${vault}"`, { encoding: 'utf8', stdio: 'pipe' });
+    } catch (e) {
+        exitCode = e.status;
+        stderr = e.stderr.toString();
+    }
+    assert.equal(exitCode, 2);
+    assert.match(stderr, /MIGRATION_NEEDED.*v1.*v2/);
+    assert.match(stderr, /migrate-v1-to-v2\.sh/);
+});
+
 test('check-schema: vault with schema_version=0 prompts migration to v2', () => {
     const vault = mkdtempSync(join(tmpdir(), 'dl-vault-'));
     mkdirSync(join(vault, 'cases'));
