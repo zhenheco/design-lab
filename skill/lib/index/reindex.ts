@@ -169,6 +169,27 @@ export function removePath(absPath: string, vault?: string): void {
     }
 }
 
+export function selfCheckOnStartup(vault?: string): void {
+    const resolvedVault = vault ?? getVaultPath();
+    const db = getDb();
+    const row = db
+        .prepare<[string], { value: string } | undefined>('SELECT value FROM index_meta WHERE key = ?')
+        .get('last_full_rebuild_at');
+
+    if (!row) {
+        fullReindex(resolvedVault);
+        return;
+    }
+
+    const sinceMs = Number(row.value);
+    if (Number.isNaN(sinceMs)) {
+        fullReindex(resolvedVault);
+        return;
+    }
+
+    scanNewer(resolvedVault, sinceMs);
+}
+
 export function fullReindex(vault?: string): void {
     const resolvedVault = vault ?? getVaultPath();
     const db = getDb();
@@ -357,6 +378,28 @@ function validateClientMeta(clientSlug: string, raw: unknown): ClientMetaRecord 
         type: raw.type,
         theme_color: raw.theme_color
     };
+}
+
+function scanNewer(vault: string, sinceMs: number): void {
+    if (!existsSync(vault)) {
+        return;
+    }
+
+    // Startup self-check only backfills files newer than the last full rebuild.
+    // It intentionally does not sweep deleted files; watcher unlink events own that cleanup path.
+    walkVault(vault, (path) => {
+        let stats: ReturnType<typeof statSync>;
+        try {
+            stats = statSync(path);
+        } catch (error: unknown) {
+            warnSkip(path, 'cannot stat path', error);
+            return;
+        }
+
+        if (stats.mtimeMs > sinceMs) {
+            reindexPath(path, vault);
+        }
+    });
 }
 
 function walkVault(root: string, onFile: (path: string) => void): void {

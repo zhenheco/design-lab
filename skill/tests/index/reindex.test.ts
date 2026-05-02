@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mock, test } from 'node:test';
 import { closeDb, getDb } from '../../lib/index/db.ts';
-import { classifyPath, fullReindex, reindexPath, removePath } from '../../lib/index/reindex.ts';
+import { classifyPath, fullReindex, reindexPath, removePath, selfCheckOnStartup } from '../../lib/index/reindex.ts';
 
 function setupVault(): string {
     const vault = mkdtempSync(join(tmpdir(), 'dl-reindex-ts-'));
@@ -103,6 +103,10 @@ function writeScenarioOverride(vault: string, scenario: string, body = 'Override
 
 function sha256(content: string): string {
     return createHash('sha256').update(content).digest('hex');
+}
+
+function sleepMs(ms: number): void {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 test('classifyPath: case positive', () => {
@@ -681,5 +685,120 @@ test('fullReindex: stores last_full_rebuild_at in index_meta as ms epoch', () =>
         } finally {
             now.mock.restore();
         }
+    });
+});
+
+test('selfCheckOnStartup: no index_meta triggers fullReindex', () => {
+    const vault = setupVault();
+    writeClientMeta(vault, 'acme', 'client');
+    writeCaseFile(vault, 'acme', 'hero-win', 'positive', 'landing-page');
+    writeScenarioOverride(vault, 'landing-page');
+
+    withVaultEnv(vault, () => {
+        selfCheckOnStartup();
+
+        const counts = getDb()
+            .prepare<[], { casesCount: number; clientsCount: number; documentsCount: number }>(
+                `
+                    SELECT
+                        (SELECT COUNT(*) FROM cases) AS casesCount,
+                        (SELECT COUNT(*) FROM clients) AS clientsCount,
+                        (SELECT COUNT(*) FROM documents) AS documentsCount
+                `
+            )
+            .get();
+        const meta = getDb()
+            .prepare<[string], { value: string }>('SELECT value FROM index_meta WHERE key = ?')
+            .get('last_full_rebuild_at');
+
+        assert.deepEqual(counts, {
+            casesCount: 1,
+            clientsCount: 1,
+            documentsCount: 2
+        });
+        assert.ok(meta);
+    });
+});
+
+test('selfCheckOnStartup: index_meta exists reindexes only newer files', () => {
+    const vault = setupVault();
+    writeClientMeta(vault, 'acme', 'client');
+    const existingCasePath = writeCaseFile(vault, 'acme', 'baseline-win', 'positive', 'landing-page');
+
+    withVaultEnv(vault, () => {
+        fullReindex();
+
+        const before = getDb()
+            .prepare<[string], { indexed_at: number }>('SELECT indexed_at FROM cases WHERE md_path = ?')
+            .get(existingCasePath);
+
+        assert.ok(before);
+
+        sleepMs(50);
+        const newCasePath = writeCaseFile(vault, 'acme', 'fresh-win', 'positive', 'landing-page');
+
+        selfCheckOnStartup();
+
+        const existingAfter = getDb()
+            .prepare<[string], { indexed_at: number }>('SELECT indexed_at FROM cases WHERE md_path = ?')
+            .get(existingCasePath);
+        const newCase = getDb()
+            .prepare<[string], { indexed_at: number }>('SELECT indexed_at FROM cases WHERE md_path = ?')
+            .get(newCasePath);
+
+        assert.deepEqual(existingAfter, before);
+        assert.ok(newCase);
+        assert.ok(newCase.indexed_at >= before.indexed_at);
+    });
+});
+
+test('selfCheckOnStartup: no newer files is a no-op', () => {
+    const vault = setupVault();
+    const casePath = writeCaseFile(vault, 'acme', 'stable-win', 'positive', 'landing-page');
+
+    withVaultEnv(vault, () => {
+        fullReindex();
+
+        const before = getDb()
+            .prepare<[string], { indexed_at: number }>('SELECT indexed_at FROM cases WHERE md_path = ?')
+            .get(casePath);
+
+        assert.ok(before);
+
+        selfCheckOnStartup();
+
+        const after = getDb()
+            .prepare<[string], { indexed_at: number }>('SELECT indexed_at FROM cases WHERE md_path = ?')
+            .get(casePath);
+
+        assert.deepEqual(after, before);
+    });
+});
+
+test('selfCheckOnStartup: removed files are not swept during startup check', () => {
+    const vault = setupVault();
+    const casePath = writeCaseFile(vault, 'acme', 'removed-later', 'positive', 'landing-page');
+
+    withVaultEnv(vault, () => {
+        fullReindex();
+
+        const before = getDb()
+            .prepare<[string], { md_path: string; indexed_at: number }>(
+                'SELECT md_path, indexed_at FROM cases WHERE md_path = ?'
+            )
+            .get(casePath);
+
+        assert.ok(before);
+        unlinkSync(casePath);
+
+        selfCheckOnStartup();
+
+        const after = getDb()
+            .prepare<[string], { md_path: string; indexed_at: number }>(
+                'SELECT md_path, indexed_at FROM cases WHERE md_path = ?'
+            )
+            .get(casePath);
+
+        assert.deepEqual(after, before);
     });
 });
