@@ -597,18 +597,48 @@ watcher.on('change', enqueueReindex);
 watcher.on('unlink', enqueueDelete);
 ```
 
-### 8.2 Content hash 比對
+### 8.2 Content hash 比對 + Path dispatch
+
+依 path 結構 dispatch 到對應表，避免重複 reindex 相同內容（Obsidian 的 atomic write 可能觸發多事件）：
 
 ```typescript
-// 避免重複 reindex 相同內容（Obsidian 的 atomic write 可能觸發多事件）
+type IndexedKind = 'case' | 'client-meta' | 'style-guide' | 'scenario-override';
+
+function classifyPath(path: string): { kind: IndexedKind; scenario?: string } | null {
+  const rel = relative(getVaultPath(), path);
+  if (/^clients\/[^/]+\/(cases|anti-library)\/.+\.md$/.test(rel)) return { kind: 'case' };
+  if (/^clients\/[^/]+\/meta\.yaml$/.test(rel))                     return { kind: 'client-meta' };
+  if (rel === 'personal-style-guide.md')                            return { kind: 'style-guide' };
+  const m = rel.match(/^scenario-overrides\/([^/]+)\.md$/);
+  if (m) return { kind: 'scenario-override', scenario: m[1] };
+  return null;
+}
+
 async function enqueueReindex(path: string) {
+  const klass = classifyPath(path);
+  if (!klass) return;
+
   const content = await readFile(path, 'utf8');
   const hash = sha256(content);
-  const existing = db.prepare('SELECT content_hash FROM cases WHERE md_path = ?').get(path);
-  if (existing?.content_hash === hash) return;   // 內容沒變
-  await reindex(path, content, hash);
+
+  const existingHash = (() => {
+    switch (klass.kind) {
+      case 'case':
+        return db.prepare('SELECT content_hash FROM cases WHERE md_path = ?').get(path)?.content_hash;
+      case 'client-meta':
+        return db.prepare('SELECT content_hash FROM clients WHERE meta_path = ?').get(path)?.content_hash;
+      case 'style-guide':
+      case 'scenario-override':
+        return db.prepare('SELECT content_hash FROM documents WHERE md_path = ?').get(path)?.content_hash;
+    }
+  })();
+
+  if (existingHash === hash) return;   // 內容沒變
+  await reindex(klass, path, content, hash);
 }
 ```
+
+`reindex(klass, ...)` 內部依 `klass.kind` 寫進 cases / clients / documents 對應表。`unlink` event 走相反邏輯（依 klass 刪對應 row）。
 
 ### 8.3 手動 rebuild
 
@@ -621,7 +651,7 @@ Dashboard server 啟動：
 2. 對所有監聽範圍跑 mtime 比對（與 §8.1 watch 範圍一致）：
    ```bash
    find "$VAULT/clients" \( -name '*.md' -o -name 'meta.yaml' \) -newer "$LAST_REBUILD"
-   find "$VAULT/scenario-overrides" -name '*.md' -newer "$LAST_REBUILD"
+   find "$VAULT/scenario-overrides" -maxdepth 1 -name '*.md' -newer "$LAST_REBUILD"
    find "$VAULT" -maxdepth 1 -name 'personal-style-guide.md' -newer "$LAST_REBUILD"
    ```
 3. 若 > 0 → 對每個檔跑增量 reindex（依 kind 寫進 cases / clients / documents 表）
