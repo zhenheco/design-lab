@@ -4,7 +4,7 @@
   "description": "Personal brand design system Claude Code skill",
   "type": "module",
   "scripts": {
-    "test": "node --test skill/tests/",
+    "test": "node --test \"skill/tests/*.test.js\"",
     "deploy": "bash deploy.sh"
   },
   "dependencies": {

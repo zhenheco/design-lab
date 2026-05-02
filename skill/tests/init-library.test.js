@@ -1,11 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execSync } from 'node:child_process';
-import { mkdtempSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const SCRIPT = new URL('../scripts/init-library.sh', import.meta.url).pathname;
+const SCRIPT = fileURLToPath(new URL('../scripts/init-library.sh', import.meta.url));
 
 test('init-library: creates expected directory tree', () => {
     const vault = mkdtempSync(join(tmpdir(), 'dl-init-'));
@@ -38,7 +39,7 @@ test('init-library: idempotent (re-run does not overwrite)', () => {
     const guidePath = join(vault, 'personal-style-guide.md');
     const original = readFileSync(guidePath, 'utf8');
     const modified = original + '\n## My custom rule\n';
-    require('fs').writeFileSync(guidePath, modified);
+    writeFileSync(guidePath, modified);
 
     execSync(`bash "${SCRIPT}" "${vault}"`, { encoding: 'utf8' });
     const after = readFileSync(guidePath, 'utf8');

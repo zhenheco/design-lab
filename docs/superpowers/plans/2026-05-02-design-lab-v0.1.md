@@ -75,7 +75,7 @@ cat > package.json <<'EOF'
   "description": "Personal brand design system Claude Code skill",
   "type": "module",
   "scripts": {
-    "test": "node --test skill/tests/",
+    "test": "node --test \"skill/tests/*.test.js\"",
     "deploy": "bash deploy.sh"
   },
   "dependencies": {
@@ -182,8 +182,9 @@ import { execSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const SCRIPT = new URL('../scripts/check-schema.sh', import.meta.url).pathname;
+const SCRIPT = fileURLToPath(new URL('../scripts/check-schema.sh', import.meta.url));
 
 test('check-schema: empty vault passes', () => {
     const vault = mkdtempSync(join(tmpdir(), 'dl-vault-'));
@@ -303,11 +304,12 @@ cat > skill/tests/init-library.test.js <<'EOF'
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execSync } from 'node:child_process';
-import { mkdtempSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const SCRIPT = new URL('../scripts/init-library.sh', import.meta.url).pathname;
+const SCRIPT = fileURLToPath(new URL('../scripts/init-library.sh', import.meta.url));
 
 test('init-library: creates expected directory tree', () => {
     const vault = mkdtempSync(join(tmpdir(), 'dl-init-'));
@@ -340,7 +342,7 @@ test('init-library: idempotent (re-run does not overwrite)', () => {
     const guidePath = join(vault, 'personal-style-guide.md');
     const original = readFileSync(guidePath, 'utf8');
     const modified = original + '\n## My custom rule\n';
-    require('fs').writeFileSync(guidePath, modified);
+    writeFileSync(guidePath, modified);
 
     execSync(`bash "${SCRIPT}" "${vault}"`, { encoding: 'utf8' });
     const after = readFileSync(guidePath, 'utf8');
@@ -1114,7 +1116,7 @@ EOF
 
 ```bash
 cat > skill/lib/last-artifact.js <<'EOF'
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
+import { writeFileSync, readFileSync, existsSync, mkdirSync, renameSync } from 'fs';
 import { dirname } from 'path';
 
 const STATE_FILE = process.env.DESIGN_LAB_STATE_PATH
@@ -1127,7 +1129,7 @@ export function writeLastArtifact(slug) {
     // atomic: write to .tmp then rename
     const tmp = STATE_FILE + '.tmp';
     writeFileSync(tmp, slug);
-    require('fs').renameSync(tmp, STATE_FILE);
+    renameSync(tmp, STATE_FILE);
 }
 
 export function readLastArtifact() {
@@ -1529,7 +1531,8 @@ import { mkdtempSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const SKILL_DIR = new URL('..', import.meta.url).pathname;
+import { fileURLToPath } from 'node:url';
+const SKILL_DIR = fileURLToPath(new URL('..', import.meta.url));
 
 function runScript(script, args = '', env = {}) {
     return execSync(`bash "${SKILL_DIR}/scripts/${script}" ${args}`, {

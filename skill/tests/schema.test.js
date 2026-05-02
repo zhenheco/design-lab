@@ -4,8 +4,9 @@ import { execSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const SCRIPT = new URL('../scripts/check-schema.sh', import.meta.url).pathname;
+const SCRIPT = fileURLToPath(new URL('../scripts/check-schema.sh', import.meta.url));
 
 test('check-schema: empty vault passes', () => {
     const vault = mkdtempSync(join(tmpdir(), 'dl-vault-'));
