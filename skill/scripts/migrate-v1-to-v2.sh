@@ -17,6 +17,16 @@ PARENT="$(dirname "$VAULT_ABS")"
 BASE="$(basename "$VAULT_ABS")"
 TS="$(date +%Y%m%d-%H%M%S)"
 BACKUP="$PARENT/$BASE.v1-backup-$TS"
+LOCK_DIR="$VAULT_ABS/.migration.lock"
+
+if [ ! -f "$VAULT_ABS/personal-style-guide.md" ] && \
+   [ ! -d "$VAULT_ABS/cases" ] && \
+   [ ! -d "$VAULT_ABS/anti-library" ] && \
+   [ ! -d "$VAULT_ABS/clients" ]; then
+    echo "ERROR: $VAULT does not look like a design-lab vault" >&2
+    echo "Expected at least one of: personal-style-guide.md, cases/, anti-library/, clients/" >&2
+    exit 1
+fi
 
 has_root_markdown() {
     local dir="$1"
@@ -45,6 +55,13 @@ if [ "$ALREADY_MIGRATED" -eq 1 ] && [ "$NEW_FILES_COUNT" -eq 0 ]; then
     echo "OK: vault already migrated to v2 (skipping, no backup created)"
     exit 0
 fi
+
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    echo "ERROR: another migration in progress (lock: $LOCK_DIR)" >&2
+    echo "If a previous migration crashed, manually remove: rmdir $LOCK_DIR" >&2
+    exit 1
+fi
+trap 'rmdir "$LOCK_DIR" 2>/dev/null' EXIT
 
 if [ "$ALREADY_MIGRATED" -eq 0 ]; then
     echo "Backup created at: $BACKUP" >&2

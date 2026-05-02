@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
     appendFileSync,
     existsSync,
@@ -154,4 +154,79 @@ test('migration: corrupt frontmatter fails loudly and preserves completed backup
     assert.match(result.stderr, /unterminated frontmatter/i);
     assert.equal(backups.length, 1);
     assert.ok(existsSync(join(backups[0], 'cases', '0099.md')));
+});
+
+test('migration: rejects system path that does not look like design-lab vault', () => {
+    const vault = mkdtempSync(join(tmpdir(), 'dl-not-vault-'));
+    writeFileSync(join(vault, 'random.txt'), 'not a design-lab vault');
+
+    const result = runMigration(vault);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /does not look like.*design-lab vault/i);
+    assert.match(result.stderr, /personal-style-guide\.md.*cases.*clients/i);
+
+    const parent = dirname(vault);
+    const prefix = `${basename(vault)}.v1-backup-`;
+    const backups = readdirSync(parent).filter((entry) => entry.startsWith(prefix));
+    assert.equal(backups.length, 0);
+});
+
+test('migration: accepts vault with only cases/ (v1 minimal)', () => {
+    const vault = mkdtempSync(join(tmpdir(), 'dl-minimal-cases-'));
+    mkdirSync(join(vault, 'cases'));
+    writeMarkdownFile(
+        join(vault, 'cases', '0001.md'),
+        'schema_version: 1\nslug: 0001\nscenario: landing\nsentiment: positive\n'
+    );
+
+    const result = runMigration(vault);
+
+    assert.equal(result.status, 0);
+    assert.ok(existsSync(join(vault, 'clients', '_personal', 'cases', '0001.md')));
+});
+
+test('migration: accepts vault with only personal-style-guide.md (no cases yet)', () => {
+    const vault = mkdtempSync(join(tmpdir(), 'dl-minimal-guide-'));
+    writeMarkdownFile(join(vault, 'personal-style-guide.md'), 'schema_version: 2\n');
+
+    const result = runMigration(vault);
+
+    assert.equal(result.status, 0);
+    assert.ok(existsSync(join(vault, 'clients', '_personal', 'meta.yaml')));
+});
+
+test('migration: concurrent invocation respects lock (second exits with lock error)', async () => {
+    const vault = createStandardV1Vault();
+    for (let i = 0; i < 5; i++) {
+        writeMarkdownFile(
+            join(vault, 'cases', `extra-${i}.md`),
+            `schema_version: 1\nslug: extra-${i}\n`
+        );
+    }
+
+    const p1 = spawn('bash', [SCRIPT, vault], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const p2 = spawn('bash', [SCRIPT, vault], { stdio: ['ignore', 'pipe', 'pipe'] });
+
+    let p1Stderr = '';
+    let p2Stderr = '';
+    p1.stderr?.on('data', (d) => {
+        p1Stderr += d.toString();
+    });
+    p2.stderr?.on('data', (d) => {
+        p2Stderr += d.toString();
+    });
+
+    const [p1Exit, p2Exit] = await Promise.all([
+        new Promise<number>((resolve) => p1.on('close', (code) => resolve(code ?? -1))),
+        new Promise<number>((resolve) => p2.on('close', (code) => resolve(code ?? -1)))
+    ]);
+
+    const successCount = [p1Exit, p2Exit].filter((code) => code === 0).length;
+    const failureCount = [p1Exit, p2Exit].filter((code) => code !== 0).length;
+    assert.equal(successCount, 1, 'one process should succeed');
+    assert.equal(failureCount, 1, 'the other should fail with lock error');
+
+    const lockedStderr = p1Exit !== 0 ? p1Stderr : p2Stderr;
+    assert.match(lockedStderr, /another migration in progress|migration.*lock/i);
 });
