@@ -21,6 +21,11 @@ export interface CaseSummary {
     mdPath: string;
 }
 
+export interface StyleGuideDoc {
+    content: string;
+    contentHash: string;
+}
+
 type CasesQuery = {
     client?: string;
     scenario?: string;
@@ -115,6 +120,37 @@ export async function fetchCases(opts?: CasesQuery): Promise<CaseSummary[]> {
 
     const data = (await res.json()) as { cases?: CaseSummary[] };
     return Array.isArray(data.cases) ? data.cases : [];
+}
+
+export async function fetchStyleGuide(): Promise<StyleGuideDoc> {
+    const res = await fetch(`${SIDECAR_URL}/api/style-guide`);
+    if (!res.ok) {
+        throw new Error(`fetch style-guide failed: ${res.status}`);
+    }
+
+    return res.json() as Promise<StyleGuideDoc>;
+}
+
+export async function saveStyleGuide(content: string, expectedHash: string): Promise<{ contentHash: string }> {
+    const res = await fetch('/api/style-guide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, expectedHash })
+    });
+
+    if (res.status === 409) {
+        const payload = await res.json().catch(() => ({})) as { error?: string };
+        const error = new Error(payload.error || 'hash conflict') as Error & { code?: string };
+        error.code = 'CONFLICT';
+        throw error;
+    }
+
+    if (!res.ok) {
+        const payload = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(payload.error || `HTTP ${res.status}`);
+    }
+
+    return res.json() as Promise<{ contentHash: string }>;
 }
 
 export function computeStatsFromCases(cases: CaseSummary[]) {

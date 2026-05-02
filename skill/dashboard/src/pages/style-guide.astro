@@ -1,0 +1,33 @@
+---
+import { StyleGuideEditor } from '../components/StyleGuideEditor.tsx';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { fetchStyleGuide } from '../lib/api.ts';
+
+let initial = { content: '', contentHash: '' };
+let error: string | null = null;
+
+try {
+    initial = await fetchStyleGuide();
+} catch (cause: unknown) {
+    error = cause instanceof Error ? cause.message : String(cause);
+}
+---
+
+<BaseLayout title="Design Lab — Style Guide">
+    <main class="mx-auto max-w-4xl p-8">
+        <h1 class="text-2xl font-semibold">Personal Style Guide</h1>
+        <p class="mt-2 text-sm text-[color:var(--color-muted)]">
+            DO / NEVER / SOMETIMES rules. Saved to vault personal-style-guide.md.
+        </p>
+
+        {
+            error && (
+                <div class="mt-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+                    Sidecar error: {error}
+                </div>
+            )
+        }
+
+        <StyleGuideEditor client:load initialContent={initial.content} initialHash={initial.contentHash} />
+    </main>
+</BaseLayout>
