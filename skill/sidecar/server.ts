@@ -1,10 +1,16 @@
-import { createServer, type Server } from 'node:http';
+import type { Server } from 'node:http';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express, { type ErrorRequestHandler, type Express, type RequestHandler } from 'express';
 import { casesRouter } from './routes/cases.ts';
 import { clientsRouter } from './routes/clients.ts';
 import { contextRouter } from './routes/context.ts';
 import { scenarioOverridesRouter } from './routes/scenario-overrides.ts';
 import { styleGuideRouter } from './routes/style-guide.ts';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const healthLogMiddleware: RequestHandler = (req, res, next) => {
     if (process.env.NODE_ENV === 'test') {
@@ -41,11 +47,29 @@ export function createApp(): Express {
     return app;
 }
 
-export function startServer(port = 5174, host = '127.0.0.1'): Server {
+async function mountDashboard(app: Express): Promise<void> {
+    const dashboardEntry = join(__dirname, '..', 'dashboard', 'dist', 'server', 'entry.mjs');
+    if (!existsSync(dashboardEntry)) {
+        console.warn(
+            '[sidecar] dashboard dist not found at',
+            dashboardEntry,
+            '— skipping mount. Run `cd skill/dashboard && npm run build` first.'
+        );
+        return;
+    }
+
+    const mod = await import(dashboardEntry);
+    app.use(mod.handler);
+    console.log('[sidecar] dashboard mounted from', dashboardEntry);
+}
+
+export async function startServer(port = 5174, host = '127.0.0.1'): Promise<Server> {
     const app = createApp();
-    const server = createServer(app);
-    server.listen(port, host, () => {
-        console.log(`[sidecar] listening on http://${host}:${port}`);
+    await mountDashboard(app);
+    return new Promise((resolve) => {
+        const server = app.listen(port, host, () => {
+            console.log(`[sidecar] listening on http://${host}:${port}`);
+            resolve(server);
+        });
     });
-    return server;
 }

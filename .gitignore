@@ -4,3 +4,4 @@ node_modules/
 .env
 .superpowers/
 .claude/
+skill/dashboard/test-results/
