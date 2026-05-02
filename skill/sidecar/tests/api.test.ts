@@ -57,6 +57,106 @@ function writeClientMeta(vault: string, slug: string, overrides: Partial<{ name:
     );
 }
 
+type CaseFixture = {
+    slug: string;
+    scenario: string;
+    sentiment: 'positive' | 'negative';
+    quotes_from_user?: string[];
+};
+
+function writeCaseMarkdown(vault: string, clientSlug: string, fixture: CaseFixture) {
+    const baseDir =
+        fixture.sentiment === 'negative'
+            ? join(vault, 'clients', clientSlug, 'anti-library')
+            : join(vault, 'clients', clientSlug, 'cases');
+    mkdirSync(baseDir, { recursive: true });
+    writeFileSync(
+        join(baseDir, `${fixture.slug}.md`),
+        [
+            '---',
+            'schema_version: 2',
+            `client: ${clientSlug}`,
+            `slug: ${fixture.slug}`,
+            `scenario: ${fixture.scenario}`,
+            `sentiment: ${fixture.sentiment}`,
+            `quotes_from_user: ${JSON.stringify(fixture.quotes_from_user ?? [])}`,
+            '---',
+            ''
+        ].join('\n')
+    );
+}
+
+function writeStyleGuide(vault: string, content: string) {
+    writeFileSync(join(vault, 'personal-style-guide.md'), content);
+}
+
+function writeScenarioOverride(vault: string, scenario: string, content: string) {
+    const overridesDir = join(vault, 'scenario-overrides');
+    mkdirSync(overridesDir, { recursive: true });
+    writeFileSync(join(overridesDir, `${scenario}.md`), content);
+}
+
+function seedContextBaseFixture(vault: string) {
+    writeClientMeta(vault, '_personal', { type: 'self' });
+    writeClientMeta(vault, 'aicycle', { type: 'client' });
+    writeClientMeta(vault, 'zhenheco', { type: 'self' });
+
+    writeStyleGuide(
+        vault,
+        [
+            '# Personal Style Guide',
+            '',
+            '## NEVER',
+            '- id: no-hard-black',
+            '  rule: "Avoid pure black in CSS"',
+            '  detector:',
+            '    type: regex',
+            "    pattern: '#000000'",
+            '    target: css',
+            ''
+        ].join('\n')
+    );
+    writeScenarioOverride(vault, 'landing', 'Landing override content\n');
+
+    writeCaseMarkdown(vault, '_personal', { slug: 'self-pos-1', scenario: 'landing', sentiment: 'positive' });
+    writeCaseMarkdown(vault, '_personal', { slug: 'self-pos-2', scenario: 'landing', sentiment: 'positive' });
+    writeCaseMarkdown(vault, '_personal', { slug: 'self-pos-3', scenario: 'brand', sentiment: 'positive' });
+    writeCaseMarkdown(vault, '_personal', { slug: 'self-neg-1', scenario: 'landing', sentiment: 'negative' });
+    writeCaseMarkdown(vault, 'aicycle', { slug: 'client-pos-1', scenario: 'landing', sentiment: 'positive' });
+    writeCaseMarkdown(vault, 'aicycle', { slug: 'client-neg-1', scenario: 'brand', sentiment: 'negative' });
+    writeCaseMarkdown(vault, 'zhenheco', { slug: 'self2-pos-1', scenario: 'brand', sentiment: 'positive' });
+    writeCaseMarkdown(vault, 'zhenheco', { slug: 'self2-neg-1', scenario: 'brand', sentiment: 'negative' });
+}
+
+function seedContextLimitFixture(vault: string) {
+    writeClientMeta(vault, '_personal', { type: 'self' });
+    writeClientMeta(vault, 'zhenheco', { type: 'self' });
+
+    writeStyleGuide(vault, '# Personal Style Guide\n');
+
+    for (let index = 1; index <= 7; index += 1) {
+        writeCaseMarkdown(vault, '_personal', {
+            slug: `top-pos-${String(index).padStart(2, '0')}`,
+            scenario: 'landing',
+            sentiment: 'positive'
+        });
+    }
+
+    for (let index = 1; index <= 6; index += 1) {
+        writeCaseMarkdown(vault, '_personal', {
+            slug: `top-neg-${String(index).padStart(2, '0')}`,
+            scenario: 'landing',
+            sentiment: 'negative'
+        });
+    }
+
+    writeCaseMarkdown(vault, 'zhenheco', { slug: 'self2-brand-pos', scenario: 'brand', sentiment: 'positive' });
+}
+
+function summarizeResponseClients(body: { cases: Array<{ client: string }>; antiCases: Array<{ client: string }> }) {
+    return Array.from(new Set([...body.cases, ...body.antiCases].map((entry) => entry.client))).sort();
+}
+
 test('GET /api/clients empty -> 200 { clients: [] }', async () => {
     const vault = setupVault();
 
@@ -265,11 +365,11 @@ test('POST /api/scenario-overrides/:scenario -> 200', async () => {
     assert.equal(readFileSync(join(vault, 'scenario-overrides', 'landing.md'), 'utf8'), 'Landing override');
 });
 
-test('GET /api/context -> 200 + stub keys', async () => {
+test('GET /api/context without query -> 200 + full union payload', async () => {
     const vault = setupVault();
-    writeClientMeta(vault, 'acme');
+    seedContextBaseFixture(vault);
 
-    const response = await withVaultEnv(vault, () => createAgent().get('/api/context').query({ client: 'acme', scenario: 'landing' }));
+    const response = await withVaultEnv(vault, () => createAgent().get('/api/context'));
 
     assert.equal(response.status, 200);
     assert.deepEqual(Object.keys(response.body).sort(), [
@@ -281,9 +381,109 @@ test('GET /api/context -> 200 + stub keys', async () => {
         'scenarioOverride',
         'styleGuide'
     ]);
-    assert.equal(response.body.client.slug, 'acme');
-    assert.deepEqual(response.body.cases, []);
-    assert.deepEqual(response.body.antiCases, []);
-    assert.deepEqual(response.body.neverRules, []);
-    assert.deepEqual(response.body.retrievedFrom, []);
+    assert.equal(response.body.client, null);
+    assert.equal(response.body.scenarioOverride, '');
+    assert.deepEqual(response.body.retrievedFrom, ['_personal', 'aicycle', 'zhenheco']);
+    assert.deepEqual(summarizeResponseClients(response.body), ['_personal', 'aicycle', 'zhenheco']);
+});
+
+test('GET /api/context?client=aicycle -> target client meta + self union scope', async () => {
+    const vault = setupVault();
+    seedContextBaseFixture(vault);
+
+    const response = await withVaultEnv(vault, () => createAgent().get('/api/context').query({ client: 'aicycle' }));
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.client.slug, 'aicycle');
+    assert.deepEqual(response.body.retrievedFrom, ['_personal', 'aicycle', 'zhenheco']);
+    assert.deepEqual(summarizeResponseClients(response.body), ['_personal', 'aicycle', 'zhenheco']);
+});
+
+test('GET /api/context?client=_personal -> self clients only', async () => {
+    const vault = setupVault();
+    seedContextBaseFixture(vault);
+
+    const response = await withVaultEnv(vault, () => createAgent().get('/api/context').query({ client: '_personal' }));
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.client.slug, '_personal');
+    assert.deepEqual(response.body.retrievedFrom, ['_personal', 'zhenheco']);
+    assert.deepEqual(summarizeResponseClients(response.body), ['_personal', 'zhenheco']);
+});
+
+test('GET /api/context?client=ghost -> unknown client returns null + self union fallback', async () => {
+    const vault = setupVault();
+    seedContextBaseFixture(vault);
+
+    const response = await withVaultEnv(vault, () => createAgent().get('/api/context').query({ client: 'ghost' }));
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.client, null);
+    assert.deepEqual(response.body.retrievedFrom, ['_personal', 'zhenheco']);
+    assert.deepEqual(summarizeResponseClients(response.body), ['_personal', 'zhenheco']);
+});
+
+test('GET /api/context client+scenario -> scenario filter + override + never rules', async () => {
+    const vault = setupVault();
+    seedContextBaseFixture(vault);
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().get('/api/context').query({ client: 'aicycle', scenario: 'landing' })
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.scenarioOverride, 'Landing override content\n');
+    assert.ok(response.body.styleGuide.includes('## NEVER'));
+    assert.equal(response.body.neverRules.length, 1);
+    assert.deepEqual(response.body.neverRules[0], {
+        id: 'no-hard-black',
+        rule: 'Avoid pure black in CSS',
+        detector: {
+            type: 'regex',
+            pattern: '#000000',
+            target: 'css'
+        }
+    });
+    assert.ok(response.body.cases.every((entry: { scenario: string; sentiment: string }) => entry.scenario === 'landing' && entry.sentiment === 'positive'));
+    assert.ok(response.body.antiCases.every((entry: { scenario: string; sentiment: string }) => entry.scenario === 'landing' && entry.sentiment === 'negative'));
+});
+
+test('GET /api/context positive cases are limited to top 5', async () => {
+    const vault = setupVault();
+    seedContextLimitFixture(vault);
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().get('/api/context').query({ client: '_personal', scenario: 'landing' })
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.cases.length, 5);
+    assert.ok(response.body.cases.every((entry: { client: string; scenario: string; sentiment: string }) => entry.client === '_personal' && entry.scenario === 'landing' && entry.sentiment === 'positive'));
+});
+
+test('GET /api/context antiCases are not limited and missing override falls back to empty string', async () => {
+    const vault = setupVault();
+    seedContextLimitFixture(vault);
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().get('/api/context').query({ client: '_personal', scenario: 'nonexistent' })
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.scenarioOverride, '');
+    assert.equal(response.body.cases.length, 0);
+    assert.equal(response.body.antiCases.length, 0);
+});
+
+test('GET /api/context antiCases return all negatives in scope', async () => {
+    const vault = setupVault();
+    seedContextLimitFixture(vault);
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().get('/api/context').query({ client: '_personal', scenario: 'landing' })
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.antiCases.length, 6);
+    assert.ok(response.body.antiCases.every((entry: { client: string; scenario: string; sentiment: string }) => entry.client === '_personal' && entry.scenario === 'landing' && entry.sentiment === 'negative'));
 });
