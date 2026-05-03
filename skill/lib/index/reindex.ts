@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import matter from 'gray-matter';
 import yaml from 'js-yaml';
@@ -403,7 +403,13 @@ function scanNewer(vault: string, sinceMs: number): void {
 }
 
 function walkVault(root: string, onFile: (path: string) => void): void {
-    const entries = readdirSync(root);
+    let entries: string[];
+    try {
+        entries = readdirSync(root);
+    } catch (error: unknown) {
+        warnSkip(root, 'cannot list directory', error);
+        return;
+    }
 
     for (const entry of entries) {
         if (entry === '.archived' || entry === '.index') {
@@ -411,11 +417,20 @@ function walkVault(root: string, onFile: (path: string) => void): void {
         }
 
         const entryPath = join(root, entry);
-        let stats: ReturnType<typeof statSync>;
+        // lstatSync does not follow symlinks. We deliberately skip symlinks
+        // (both file and dir variants) — the vault is meant to be self-contained,
+        // and following symlinks risks cycles (vault → vault), unbounded fan-out
+        // (symlink → /), or accidentally indexing files outside the vault root.
+        let stats: ReturnType<typeof lstatSync>;
         try {
-            stats = statSync(entryPath);
+            stats = lstatSync(entryPath);
         } catch (error: unknown) {
             warnSkip(entryPath, 'cannot stat path', error);
+            continue;
+        }
+
+        if (stats.isSymbolicLink()) {
+            console.warn(`[reindex] skip ${entryPath}: symlink (vault must be self-contained)`);
             continue;
         }
 

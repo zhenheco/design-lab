@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mock, test } from 'node:test';
@@ -800,5 +800,96 @@ test('selfCheckOnStartup: removed files are not swept during startup check', () 
             .get(casePath);
 
         assert.deepEqual(after, before);
+    });
+});
+
+test('walkVault: symlinks are not followed (skips symlink dirs)', () => {
+    const vault = setupVault();
+    writeClientMeta(vault, '_personal', 'self');
+    writeCaseFile(vault, '_personal', 'inside', 'positive', 'landing');
+
+    // Outside-of-vault directory containing a case-shaped file
+    const outsideDir = mkdtempSync(join(tmpdir(), 'dl-outside-'));
+    const outsideCase = join(outsideDir, 'should-not-index.md');
+    writeFileSync(
+        outsideCase,
+        [
+            '---',
+            'schema_version: 2',
+            'client: external',
+            'slug: should-not-index',
+            'scenario: landing',
+            'quotes_from_user: ["leak"]',
+            'tags:',
+            '  style: ["modern"]',
+            '  mood: ["calm"]',
+            '  elements: ["grid"]',
+            '  industry: ["saas"]',
+            'tokens:',
+            '  emphasis: 1',
+            '---',
+            '',
+            '# leak',
+            ''
+        ].join('\n')
+    );
+
+    // Create symlink inside the vault that points OUT — walkVault must not follow it.
+    const symlinkPath = join(vault, 'clients', '_personal', 'cases', 'external');
+    symlinkSync(outsideDir, symlinkPath);
+
+    withVaultEnv(vault, () => {
+        // Should NOT throw (no infinite recursion, no ENOENT explosion).
+        fullReindex();
+
+        const rows = getDb()
+            .prepare<[], { md_path: string }>('SELECT md_path FROM cases')
+            .all();
+
+        // Only the legitimate case should be indexed; the symlinked file must be skipped.
+        const paths = rows.map((row) => row.md_path);
+        assert.equal(paths.length, 1, `expected 1 case, got ${paths.length}: ${JSON.stringify(paths)}`);
+        assert.match(paths[0], /\/cases\/inside\.md$/);
+        assert.ok(!paths.some((path) => path.includes('external')), 'symlinked path was indexed');
+    });
+});
+
+test('walkVault: symlink cycle (vault → vault) does not crash or duplicate', () => {
+    const vault = setupVault();
+    writeClientMeta(vault, '_personal', 'self');
+    writeCaseFile(vault, '_personal', 'only-one', 'positive', 'landing');
+
+    // Create symlink that points back to vault root, forming a cycle.
+    const cyclePath = join(vault, 'clients', '_personal', 'cycle');
+    symlinkSync(vault, cyclePath);
+
+    withVaultEnv(vault, () => {
+        fullReindex(); // Must complete without throwing.
+
+        const rows = getDb()
+            .prepare<[], { md_path: string }>('SELECT md_path FROM cases')
+            .all();
+
+        assert.equal(rows.length, 1, `cycle re-indexed: ${rows.length} rows`);
+    });
+});
+
+test('walkVault: broken symlink (dangling target) is skipped without crash', () => {
+    const vault = setupVault();
+    writeClientMeta(vault, '_personal', 'self');
+    writeCaseFile(vault, '_personal', 'real-one', 'positive', 'landing');
+
+    const brokenPath = join(vault, 'clients', '_personal', 'cases', 'broken');
+    symlinkSync('/tmp/__definitely_does_not_exist_dl_test__', brokenPath);
+
+    withVaultEnv(vault, () => {
+        // lstatSync on a broken symlink returns the link's own stats — must NOT throw.
+        fullReindex();
+
+        const rows = getDb()
+            .prepare<[], { md_path: string }>('SELECT md_path FROM cases')
+            .all();
+
+        assert.equal(rows.length, 1, `dangling symlink polluted index: ${rows.length} rows`);
     });
 });
