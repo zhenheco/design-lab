@@ -1,10 +1,11 @@
-import { test } from 'node:test';
+import { mock, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import express from 'express';
 import request from 'supertest';
-import { createApp } from '../server.ts';
+import { createApp, errorHandler } from '../server.ts';
 
 function setupVault() {
     const vault = mkdtempSync(join(tmpdir(), 'dl-sidecar-api-ts-'));
@@ -31,6 +32,33 @@ async function withVaultEnv<T>(vault: string, fn: () => Promise<T> | T): Promise
             delete process.env.NODE_ENV;
         } else {
             process.env.NODE_ENV = previousNodeEnv;
+        }
+    }
+}
+
+async function withEnvVars<T>(
+    overrides: Record<string, string | undefined>,
+    fn: () => Promise<T> | T
+): Promise<T> {
+    const previous = new Map<string, string | undefined>();
+    for (const [key, value] of Object.entries(overrides)) {
+        previous.set(key, process.env[key]);
+        if (value === undefined) {
+            delete process.env[key];
+        } else {
+            process.env[key] = value;
+        }
+    }
+
+    try {
+        return await fn();
+    } finally {
+        for (const [key, value] of previous.entries()) {
+            if (value === undefined) {
+                delete process.env[key];
+            } else {
+                process.env[key] = value;
+            }
         }
     }
 }
@@ -276,6 +304,9 @@ test('POST /api/cases valid -> 201', async () => {
 
 test('POST /api/cases missing client -> 400', async () => {
     const vault = setupVault();
+    const sourceDir = mkdtempSync(join(tmpdir(), 'dl-missing-client-'));
+    const sourceImagePath = join(sourceDir, 'missing.png');
+    writeFileSync(sourceImagePath, 'png');
 
     const response = await withVaultEnv(vault, () =>
         createAgent().post('/api/cases').send({
@@ -284,7 +315,7 @@ test('POST /api/cases missing client -> 400', async () => {
             sentiment: 'positive',
             scenario: 'landing',
             quote: 'Strong hero section',
-            sourceImagePath: '/tmp/missing.png'
+            sourceImagePath
         })
     );
 
@@ -504,6 +535,31 @@ test('POST /api/clients invalid JSON -> 400 (not 500)', async () => {
     assert.match(response.body.error, /invalid JSON/i);
 });
 
+test('errorHandler: 500 returns generic message, not internal detail', async () => {
+    const error = new Error('vault path /Users/foo/secret leaked');
+    const app = express();
+    app.get('/boom', () => {
+        throw error;
+    });
+    app.use(errorHandler);
+
+    const consoleError = mock.method(console, 'error', () => {});
+    try {
+        const response = await request(app).get('/boom');
+
+        assert.equal(response.status, 500);
+        assert.deepEqual(response.body, { error: 'internal server error' });
+        assert.doesNotMatch(JSON.stringify(response.body), /leaked|secret|Users\/foo/i);
+        assert.ok(
+            consoleError.mock.calls.some(
+                (call) => String(call.arguments[0]).includes('[sidecar] 500:') && call.arguments[1] === error
+            )
+        );
+    } finally {
+        consoleError.mock.restore();
+    }
+});
+
 test('POST /api/style-guide payload too large -> 413 (not 500)', async () => {
     const vault = setupVault();
     writeFileSync(join(vault, 'personal-style-guide.md'), 'old');
@@ -566,9 +622,133 @@ test('POST /api/cases sourceImagePath in /etc/ -> 400 (system path forbidden)', 
     );
 
     assert.equal(response.status, 400);
-    assert.match(response.body.error, /forbidden system path/i);
+    assert.match(response.body.error, /sourceImagePath/i);
     // verify no file was written
     assert.equal(existsSync(join(vault, 'clients', '_personal', 'cases', 'attack', 'snapshot')), false);
+});
+
+test('POST /api/cases sourceImagePath in TMPDIR -> 201 (allowlist default)', async () => {
+    const vault = setupVault();
+    writeClientMeta(vault, '_personal', { type: 'self' });
+    const sourceDir = mkdtempSync(join(tmpdir(), 'dl-source-allow-'));
+    const sourceImagePath = join(sourceDir, 'allowed.png');
+    writeFileSync(sourceImagePath, 'png');
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().post('/api/cases').send({
+            client: '_personal',
+            slug: 'tmp-allowed',
+            sentiment: 'positive',
+            scenario: 'landing',
+            quote: 'allowed',
+            sourceImagePath
+        })
+    );
+
+    assert.equal(response.status, 201);
+    assert.equal(response.body.casePath, join(vault, 'clients', '_personal', 'cases', 'tmp-allowed.md'));
+});
+
+test('POST /api/cases sourceImagePath in ~/.ssh -> 400', async () => {
+    const vault = setupVault();
+    const fakeHomesRoot = join(process.cwd(), '.tmp-test-homes');
+    mkdirSync(fakeHomesRoot, { recursive: true });
+    const fakeHome = mkdtempSync(join(fakeHomesRoot, 'home-'));
+    writeClientMeta(vault, '_personal', { type: 'self' });
+    mkdirSync(join(fakeHome, '.ssh'), { recursive: true });
+    const sourceImagePath = join(fakeHome, '.ssh', 'id_rsa');
+    writeFileSync(sourceImagePath, 'secret');
+
+    const response = await withEnvVars({ HOME: fakeHome }, () =>
+        withVaultEnv(vault, () =>
+            createAgent().post('/api/cases').send({
+                client: '_personal',
+                slug: 'home-ssh-reject',
+                sentiment: 'positive',
+                scenario: 'landing',
+                quote: 'reject',
+                sourceImagePath
+            })
+        )
+    );
+
+    assert.equal(response.status, 400);
+    assert.match(response.body.error, /sourceImagePath/i);
+});
+
+test('POST /api/cases sourceImagePath traversal from screenshots -> 400', async () => {
+    const vault = setupVault();
+    const fakeHomesRoot = join(process.cwd(), '.tmp-test-homes');
+    mkdirSync(fakeHomesRoot, { recursive: true });
+    const fakeHome = mkdtempSync(join(fakeHomesRoot, 'home-'));
+    writeClientMeta(vault, '_personal', { type: 'self' });
+    mkdirSync(join(fakeHome, '.ssh'), { recursive: true });
+    mkdirSync(join(fakeHome, 'Pictures', 'Screenshots'), { recursive: true });
+    writeFileSync(join(fakeHome, '.ssh', 'id_rsa'), 'secret');
+
+    const response = await withEnvVars({ HOME: fakeHome }, () =>
+        withVaultEnv(vault, () =>
+            createAgent().post('/api/cases').send({
+                client: '_personal',
+                slug: 'traversal-reject',
+                sentiment: 'positive',
+                scenario: 'landing',
+                quote: 'reject',
+                sourceImagePath: join(fakeHome, 'Pictures', 'Screenshots', '..', '..', '.ssh', 'id_rsa')
+            })
+        )
+    );
+
+    assert.equal(response.status, 400);
+    assert.match(response.body.error, /sourceImagePath/i);
+});
+
+test('POST /api/cases sourceImagePath allowlist env override rejects default tmpdir path', async () => {
+    const vault = setupVault();
+    writeClientMeta(vault, '_personal', { type: 'self' });
+    const sourceDir = mkdtempSync(join(tmpdir(), 'dl-source-default-reject-'));
+    const sourceImagePath = join(sourceDir, 'default.png');
+    writeFileSync(sourceImagePath, 'png');
+
+    const response = await withEnvVars({ DESIGN_LAB_SOURCE_ALLOWLIST: '/tmp/custom' }, () =>
+        withVaultEnv(vault, () =>
+            createAgent().post('/api/cases').send({
+                client: '_personal',
+                slug: 'override-default-reject',
+                sentiment: 'positive',
+                scenario: 'landing',
+                quote: 'reject',
+                sourceImagePath
+            })
+        )
+    );
+
+    assert.equal(response.status, 400);
+    assert.match(response.body.error, /sourceImagePath/i);
+});
+
+test('POST /api/cases sourceImagePath allowlist env override allows configured prefix', async () => {
+    const vault = setupVault();
+    const allowedRoot = mkdtempSync(join(tmpdir(), 'dl-source-custom-'));
+    writeClientMeta(vault, '_personal', { type: 'self' });
+    const sourceImagePath = join(allowedRoot, 'custom.png');
+    writeFileSync(sourceImagePath, 'png');
+
+    const response = await withEnvVars({ DESIGN_LAB_SOURCE_ALLOWLIST: allowedRoot }, () =>
+        withVaultEnv(vault, () =>
+            createAgent().post('/api/cases').send({
+                client: '_personal',
+                slug: 'override-allowed',
+                sentiment: 'positive',
+                scenario: 'landing',
+                quote: 'allowed',
+                sourceImagePath
+            })
+        )
+    );
+
+    assert.equal(response.status, 201);
+    assert.equal(response.body.casePath, join(vault, 'clients', '_personal', 'cases', 'override-allowed.md'));
 });
 
 test('PUT /api/clients/:slug with slug field -> 400 (cannot change slug, no silent ignore)', async () => {

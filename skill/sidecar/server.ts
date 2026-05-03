@@ -25,9 +25,7 @@ const healthLogMiddleware: RequestHandler = (req, res, next) => {
     next();
 };
 
-const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
-    const message = error instanceof Error ? error.message : 'Internal Server Error';
-
+export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
     if (error instanceof SyntaxError && 'body' in (error as object)) {
         res.status(400).json({ error: 'invalid JSON' });
         return;
@@ -41,7 +39,8 @@ const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
         return;
     }
 
-    res.status(500).json({ error: message });
+    console.error('[sidecar] 500:', error);
+    res.status(500).json({ error: 'internal server error' });
 };
 
 export function createApp(): Express {

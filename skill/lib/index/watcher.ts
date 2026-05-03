@@ -1,5 +1,5 @@
 import chokidar, { type FSWatcher } from 'chokidar';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { getVaultPath } from '../paths.ts';
 import { classifyPath, reindexPath, removePath } from './reindex.ts';
@@ -23,6 +23,7 @@ export function startWatcher(vault?: string): FSWatcher {
         cwd: resolvedVault,
         ignored: ['**/.archived/**', '**/.index/**'],
         ignoreInitial: true,
+        followSymlinks: false,
         awaitWriteFinish: {
             stabilityThreshold: 200,
             pollInterval: 50
@@ -31,6 +32,9 @@ export function startWatcher(vault?: string): FSWatcher {
 
     watcher.on('add', (path) => {
         const absPath = join(resolvedVault, path);
+        if (shouldSkipSymlinkPath(absPath)) {
+            return;
+        }
         if (!classifyPath(absPath, resolvedVault)) {
             return;
         }
@@ -40,6 +44,9 @@ export function startWatcher(vault?: string): FSWatcher {
 
     watcher.on('change', (path) => {
         const absPath = join(resolvedVault, path);
+        if (shouldSkipSymlinkPath(absPath)) {
+            return;
+        }
         if (!classifyPath(absPath, resolvedVault)) {
             return;
         }
@@ -82,22 +89,64 @@ function scanAddedDirectory(watcher: FSWatcher, directoryPath: string, vault: st
         return;
     }
 
-    for (const entry of readdirSync(directoryPath, { withFileTypes: true })) {
-        if (entry.name === '.archived' || entry.name === '.index') {
+    if (shouldSkipSymlinkPath(directoryPath)) {
+        return;
+    }
+
+    let entries: string[];
+    try {
+        entries = readdirSync(directoryPath);
+    } catch (error: unknown) {
+        console.warn(`[watcher] skip ${directoryPath}: cannot list directory (${String(error)})`);
+        return;
+    }
+
+    for (const entry of entries) {
+        if (entry === '.archived' || entry === '.index') {
             continue;
         }
 
-        const entryPath = join(directoryPath, entry.name);
-        if (entry.isDirectory()) {
+        const entryPath = join(directoryPath, entry);
+        let stats: ReturnType<typeof lstatSync>;
+        try {
+            stats = lstatSync(entryPath);
+        } catch (error: unknown) {
+            console.warn(`[watcher] skip ${entryPath}: cannot stat path (${String(error)})`);
+            continue;
+        }
+
+        if (stats.isSymbolicLink()) {
+            console.warn(`[watcher] skip ${entryPath}: symlink (vault must be self-contained)`);
+            continue;
+        }
+
+        if (stats.isDirectory()) {
             scanAddedDirectory(watcher, entryPath, vault);
             continue;
         }
 
-        if (!entry.isFile() || !classifyPath(entryPath, vault)) {
+        if (!stats.isFile() || !classifyPath(entryPath, vault)) {
             continue;
         }
 
         watcher.add(entryPath);
         reindexPath(entryPath, vault);
     }
+}
+
+function shouldSkipSymlinkPath(absPath: string): boolean {
+    let stats: ReturnType<typeof lstatSync>;
+    try {
+        stats = lstatSync(absPath);
+    } catch (error: unknown) {
+        console.warn(`[watcher] skip ${absPath}: cannot stat path (${String(error)})`);
+        return true;
+    }
+
+    if (!stats.isSymbolicLink()) {
+        return false;
+    }
+
+    console.warn(`[watcher] skip ${absPath}: symlink (vault must be self-contained)`);
+    return true;
 }

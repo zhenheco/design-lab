@@ -26,6 +26,8 @@ type ClientMetaRecord = {
     theme_color: string;
 };
 
+type ErrorReporter = () => void;
+
 type Statements = {
     selectCaseHash: Database.Statement<[string], { content_hash: string }>;
     upsertCase: Database.Statement<
@@ -119,7 +121,7 @@ function classifyClientFile(parts: string[]): ClassifiedPath | null {
     };
 }
 
-export function reindexPath(absPath: string, vault?: string): void {
+export function reindexPath(absPath: string, vault?: string, onError?: ErrorReporter): void {
     const resolvedVault = vault ?? getVaultPath();
     const classified = classifyPathWithCases(absPath, resolvedVault);
     if (!classified || !existsSync(absPath)) {
@@ -129,19 +131,19 @@ export function reindexPath(absPath: string, vault?: string): void {
     switch (classified.kind) {
         case 'case':
             if (isCasePath(classified)) {
-                reindexCase(absPath, classified);
+                reindexCase(absPath, classified, resolvedVault, onError);
             }
             return;
         case 'client-meta':
             if (isClientMetaPath(classified)) {
-                reindexClientMeta(absPath, classified);
+                reindexClientMeta(absPath, classified, resolvedVault, onError);
             }
             return;
         case 'style-guide':
-            reindexDocument(absPath, 'style-guide', null);
+            reindexDocument(absPath, 'style-guide', null, onError);
             return;
         case 'scenario-override':
-            reindexDocument(absPath, 'scenario-override', classified.scenario ?? null);
+            reindexDocument(absPath, 'scenario-override', classified.scenario ?? null, onError);
             return;
     }
 }
@@ -196,6 +198,11 @@ export function fullReindex(vault?: string): void {
     const statements = getStatements(db);
 
     const rebuild = db.transaction(() => {
+        let scanErrors = 0;
+        const recordScanError = () => {
+            scanErrors += 1;
+        };
+
         db.exec(`
             DELETE FROM cases;
             DELETE FROM clients;
@@ -203,9 +210,23 @@ export function fullReindex(vault?: string): void {
         `);
 
         if (existsSync(resolvedVault)) {
-            walkVault(resolvedVault, (path) => {
-                reindexPath(path, resolvedVault);
-            });
+            walkVault(
+                resolvedVault,
+                (path) => {
+                    try {
+                        reindexPath(path, resolvedVault, recordScanError);
+                    } catch (error: unknown) {
+                        recordScanError();
+                        warnSkip(path, 'reindex failed', error);
+                    }
+                },
+                recordScanError
+            );
+        }
+
+        if (scanErrors > 0) {
+            console.warn(`[reindex] fullReindex completed with ${scanErrors} scan error(s); skipping last_full_rebuild_at`);
+            return;
         }
 
         statements.setMeta.run('last_full_rebuild_at', String(Date.now()));
@@ -250,7 +271,9 @@ function reindexCase(
         client: string;
         slug: string;
         sentiment: 'positive' | 'negative';
-    }
+    },
+    vault: string,
+    onError?: ErrorReporter
 ): void {
     let rawContent: string;
     let frontmatterData: CaseFrontmatter;
@@ -261,6 +284,8 @@ function reindexCase(
         frontmatterData = toRecord(parsed.data);
     } catch (error: unknown) {
         warnSkip(absPath, 'case parse failed', error);
+        onError?.();
+        removePath(absPath, vault);
         return;
     }
 
@@ -289,7 +314,9 @@ function reindexClientMeta(
     classified: ClassifiedPath & {
         kind: 'client-meta';
         client: string;
-    }
+    },
+    vault: string,
+    onError?: ErrorReporter
 ): void {
     let rawContent: string;
     let meta: ClientMetaRecord | null;
@@ -300,11 +327,15 @@ function reindexClientMeta(
         meta = validateClientMeta(classified.client, parsed);
     } catch (error: unknown) {
         warnSkip(absPath, 'client meta parse failed', error);
+        onError?.();
+        removePath(absPath, vault);
         return;
     }
 
     if (!meta) {
         console.warn(`[reindex] skip ${absPath}: invalid client meta`);
+        onError?.();
+        removePath(absPath, vault);
         return;
     }
 
@@ -329,13 +360,15 @@ function reindexClientMeta(
 function reindexDocument(
     absPath: string,
     kind: 'style-guide' | 'scenario-override',
-    scenario: string | null
+    scenario: string | null,
+    onError?: ErrorReporter
 ): void {
     let rawContent: string;
     try {
         rawContent = readFileSync(absPath, 'utf8');
     } catch (error: unknown) {
         warnSkip(absPath, 'document read failed', error);
+        onError?.();
         return;
     }
 
@@ -402,12 +435,13 @@ function scanNewer(vault: string, sinceMs: number): void {
     });
 }
 
-function walkVault(root: string, onFile: (path: string) => void): void {
+function walkVault(root: string, onFile: (path: string) => void, onError?: ErrorReporter): void {
     let entries: string[];
     try {
         entries = readdirSync(root);
     } catch (error: unknown) {
         warnSkip(root, 'cannot list directory', error);
+        onError?.();
         return;
     }
 
@@ -426,6 +460,7 @@ function walkVault(root: string, onFile: (path: string) => void): void {
             stats = lstatSync(entryPath);
         } catch (error: unknown) {
             warnSkip(entryPath, 'cannot stat path', error);
+            onError?.();
             continue;
         }
 
@@ -435,7 +470,7 @@ function walkVault(root: string, onFile: (path: string) => void): void {
         }
 
         if (stats.isDirectory()) {
-            walkVault(entryPath, onFile);
+            walkVault(entryPath, onFile, onError);
             continue;
         }
 

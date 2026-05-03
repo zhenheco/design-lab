@@ -1,24 +1,34 @@
-import { resolve as resolvePath } from 'node:path';
+import { homedir, tmpdir } from 'node:os';
+import { resolve as resolvePath, sep } from 'node:path';
 import { Router, type Request } from 'express';
 import { loadCaseSummaries, type CaseSummary } from '../../lib/case-loader.ts';
 import { getVaultPath } from '../../lib/paths.ts';
 import { writeCase, type WriteCaseInput } from '../../lib/case-writer.ts';
 
-// 防 sidecar caller 把系統檔（/etc/passwd 等）當 sourceImagePath 讓 case-writer 複製進 vault
-const FORBIDDEN_SOURCE_PREFIXES = [
-    '/etc/',
-    '/private/etc/',
-    '/System/',
-    '/Library/Keychains/',
-    '/var/db/',
-    '/var/log/',
-    '/usr/bin/',
-    '/usr/sbin/'
-];
+function getSourceAllowlist(): string[] {
+    const home = process.env.HOME ?? homedir();
+    const configured =
+        process.env.DESIGN_LAB_SOURCE_ALLOWLIST
+        ?? `${tmpdir()}:${home}/Pictures/Screenshots:${home}/Downloads`;
 
-function isSafeSourceImagePath(abs: string): boolean {
-    const resolved = resolvePath(abs);
-    return !FORBIDDEN_SOURCE_PREFIXES.some((prefix) => resolved.startsWith(prefix));
+    return configured
+        .split(':')
+        .map((prefix) => prefix.trim())
+        .filter((prefix) => prefix.length > 0)
+        .map((prefix) => resolvePath(prefix));
+}
+
+function pathHasTraversal(path: string): boolean {
+    return path.split(/[\\/]+/).includes('..');
+}
+
+function isAllowedSourceImagePath(path: string): boolean {
+    if (pathHasTraversal(path)) {
+        return false;
+    }
+
+    const resolved = resolvePath(path);
+    return getSourceAllowlist().some((prefix) => resolved === prefix || resolved.startsWith(`${prefix}${sep}`));
 }
 
 type CasesQuery = {
@@ -103,8 +113,8 @@ export function casesRouter(): Router {
             return;
         }
 
-        if (!isSafeSourceImagePath(body.sourceImagePath)) {
-            res.status(400).json({ error: `sourceImagePath in forbidden system path: ${body.sourceImagePath}` });
+        if (!isAllowedSourceImagePath(body.sourceImagePath)) {
+            res.status(400).json({ error: `sourceImagePath not allowed: ${body.sourceImagePath}` });
             return;
         }
 

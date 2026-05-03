@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import BetterSqlite3 from 'better-sqlite3';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -107,6 +108,15 @@ function sha256(content: string): string {
 
 function sleepMs(ms: number): void {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function getIndexMetaValue(vault: string, key: string): string | undefined {
+    const db = new BetterSqlite3(join(vault, '.index', 'library.db'));
+    try {
+        return db.prepare<[string], { value: string }>('SELECT value FROM index_meta WHERE key = ?').get(key)?.value;
+    } finally {
+        db.close();
+    }
 }
 
 test('classifyPath: case positive', () => {
@@ -337,6 +347,35 @@ test('reindexPath: changed content updates hash and indexed_at', () => {
     });
 });
 
+test('reindexPath: case parse failure (corrupt frontmatter) removes stale row', () => {
+    const vault = setupVault();
+    const absPath = writeCaseFile(vault, 'acme', 'stale-case', 'positive', 'landing-page');
+    const warn = mock.method(console, 'warn', () => {});
+
+    try {
+        withVaultEnv(vault, () => {
+            reindexPath(absPath);
+            assert.ok(
+                getDb()
+                    .prepare<[string], { md_path: string }>('SELECT md_path FROM cases WHERE md_path = ?')
+                    .get(absPath)
+            );
+
+            writeFileSync(absPath, '---\nslug: [broken\n');
+            reindexPath(absPath);
+
+            assert.equal(
+                getDb()
+                    .prepare<[string], { md_path: string }>('SELECT md_path FROM cases WHERE md_path = ?')
+                    .get(absPath),
+                undefined
+            );
+        });
+    } finally {
+        warn.mock.restore();
+    }
+});
+
 test('reindexPath: client-meta yaml writes clients row', () => {
     const vault = setupVault();
     const absPath = writeClientMeta(vault, 'acme', 'client');
@@ -382,6 +421,76 @@ test('reindexPath: broken yaml warns and skips row', () => {
             assert.equal(row, undefined);
         });
         assert.ok(warn.mock.calls.length >= 1);
+    } finally {
+        warn.mock.restore();
+    }
+});
+
+test('reindexPath: client-meta parse failure removes stale client row', () => {
+    const vault = setupVault();
+    const absPath = writeClientMeta(vault, 'acme', 'client');
+    const warn = mock.method(console, 'warn', () => {});
+
+    try {
+        withVaultEnv(vault, () => {
+            reindexPath(absPath);
+            assert.ok(
+                getDb()
+                    .prepare<[string], { slug: string }>('SELECT slug FROM clients WHERE slug = ?')
+                    .get('acme')
+            );
+
+            writeFileSync(absPath, 'slug: [broken\n');
+            reindexPath(absPath);
+
+            assert.equal(
+                getDb()
+                    .prepare<[string], { slug: string }>('SELECT slug FROM clients WHERE slug = ?')
+                    .get('acme'),
+                undefined
+            );
+        });
+    } finally {
+        warn.mock.restore();
+    }
+});
+
+test('reindexPath: invalid client-meta removes stale client row', () => {
+    const vault = setupVault();
+    const absPath = writeClientMeta(vault, 'acme', 'client');
+    const warn = mock.method(console, 'warn', () => {});
+
+    try {
+        withVaultEnv(vault, () => {
+            reindexPath(absPath);
+            assert.ok(
+                getDb()
+                    .prepare<[string], { slug: string }>('SELECT slug FROM clients WHERE slug = ?')
+                    .get('acme')
+            );
+
+            writeFileSync(
+                absPath,
+                [
+                    'schema_version: 2',
+                    'slug: acme',
+                    'name: "acme studio"',
+                    'type: partner',
+                    'created_at: "2026-05-03"',
+                    'notes: ""',
+                    'theme_color: "#112233"',
+                    ''
+                ].join('\n')
+            );
+            reindexPath(absPath);
+
+            assert.equal(
+                getDb()
+                    .prepare<[string], { slug: string }>('SELECT slug FROM clients WHERE slug = ?')
+                    .get('acme'),
+                undefined
+            );
+        });
     } finally {
         warn.mock.restore();
     }
@@ -675,16 +784,57 @@ test('fullReindex: stores last_full_rebuild_at in index_meta as ms epoch', () =>
         const now = mock.method(Date, 'now', () => 1700000000123);
 
         try {
-            fullReindex();
-
-            const row = getDb()
-                .prepare<[string], { value: string }>('SELECT value FROM index_meta WHERE key = ?')
-                .get('last_full_rebuild_at');
-
-            assert.deepEqual(row, { value: '1700000000123' });
+            fullReindex(vault);
+            closeDb();
+            assert.equal(getIndexMetaValue(vault, 'last_full_rebuild_at'), '1700000000123');
         } finally {
             now.mock.restore();
         }
+    });
+});
+
+test('fullReindex: scan errors prevent last_full_rebuild_at write', { concurrency: false }, () => {
+    const vault = setupVault();
+    const metaPath = writeClientMeta(vault, 'acme', 'client');
+    const corruptCasePath = writeCaseFile(vault, 'acme', 'broken-rebuild', 'positive', 'landing-page');
+    writeFileSync(
+        metaPath,
+        [
+            'schema_version: 2',
+            'slug: acme',
+            'name: "acme studio"',
+            'type: partner',
+            'created_at: "2026-05-03"',
+            'notes: ""',
+            'theme_color: "#112233"',
+            ''
+        ].join('\n')
+    );
+    writeFileSync(corruptCasePath, '---\nslug: [broken\n');
+    const warn = mock.method(console, 'warn', () => {});
+
+    try {
+        withVaultEnv(vault, () => {
+            fullReindex(vault);
+            closeDb();
+            assert.equal(getIndexMetaValue(vault, 'last_full_rebuild_at'), undefined);
+        });
+    } finally {
+        warn.mock.restore();
+    }
+});
+
+test('fullReindex: clean run still writes last_full_rebuild_at', { concurrency: false }, () => {
+    const vault = setupVault();
+    writeClientMeta(vault, 'acme', 'client');
+    writeCaseFile(vault, 'acme', 'clean-rebuild', 'positive', 'landing-page');
+
+    withVaultEnv(vault, () => {
+        fullReindex(vault);
+        closeDb();
+        const value = getIndexMetaValue(vault, 'last_full_rebuild_at');
+        assert.ok(value);
+        assert.match(value, /^\d+$/);
     });
 });
 
