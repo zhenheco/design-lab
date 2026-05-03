@@ -1,7 +1,25 @@
+import { resolve as resolvePath } from 'node:path';
 import { Router, type Request } from 'express';
 import { loadCaseSummaries, type CaseSummary } from '../../lib/case-loader.ts';
 import { getVaultPath } from '../../lib/paths.ts';
 import { writeCase, type WriteCaseInput } from '../../lib/case-writer.ts';
+
+// 防 sidecar caller 把系統檔（/etc/passwd 等）當 sourceImagePath 讓 case-writer 複製進 vault
+const FORBIDDEN_SOURCE_PREFIXES = [
+    '/etc/',
+    '/private/etc/',
+    '/System/',
+    '/Library/Keychains/',
+    '/var/db/',
+    '/var/log/',
+    '/usr/bin/',
+    '/usr/sbin/'
+];
+
+function isSafeSourceImagePath(abs: string): boolean {
+    const resolved = resolvePath(abs);
+    return !FORBIDDEN_SOURCE_PREFIXES.some((prefix) => resolved.startsWith(prefix));
+}
 
 type CasesQuery = {
     client?: string;
@@ -82,6 +100,11 @@ export function casesRouter(): Router {
         const body = parseWriteCaseBody(req);
         if (!body) {
             res.status(400).json({ error: 'invalid case payload' });
+            return;
+        }
+
+        if (!isSafeSourceImagePath(body.sourceImagePath)) {
+            res.status(400).json({ error: `sourceImagePath in forbidden system path: ${body.sourceImagePath}` });
             return;
         }
 

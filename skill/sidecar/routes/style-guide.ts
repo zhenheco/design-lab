@@ -56,6 +56,12 @@ export function styleGuideRouter(): Router {
         const styleGuidePath = getStyleGuidePath();
         const currentContent = existsSync(styleGuidePath) ? readFileSync(styleGuidePath, 'utf8') : null;
         const currentHash = currentContent === null ? null : hashContent(currentContent);
+
+        // 既有 style-guide → expectedHash 必傳防 lost-update
+        if (currentHash !== null && body.expectedHash === undefined) {
+            res.status(400).json({ error: 'expectedHash required when style guide exists' });
+            return;
+        }
         if (body.expectedHash !== undefined && body.expectedHash !== currentHash) {
             res.status(409).json({ error: 'style guide hash conflict' });
             return;

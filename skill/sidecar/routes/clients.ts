@@ -105,6 +105,11 @@ export function clientsRouter(): Router {
     });
 
     router.put('/:slug', (req, res) => {
+        if (isRecord(req.body) && 'slug' in req.body) {
+            res.status(400).json({ error: 'cannot change slug' });
+            return;
+        }
+
         const body = readUpdateBody(req);
         if (!body) {
             res.status(400).json({ error: 'invalid client payload' });

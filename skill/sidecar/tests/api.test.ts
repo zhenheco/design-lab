@@ -487,3 +487,117 @@ test('GET /api/context antiCases return all negatives in scope', async () => {
     assert.equal(response.body.antiCases.length, 6);
     assert.ok(response.body.antiCases.every((entry: { client: string; scenario: string; sentiment: string }) => entry.client === '_personal' && entry.scenario === 'landing' && entry.sentiment === 'negative'));
 });
+
+// === Destructive QA regressions ===
+
+test('POST /api/clients invalid JSON -> 400 (not 500)', async () => {
+    const vault = setupVault();
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent()
+            .post('/api/clients')
+            .set('Content-Type', 'application/json')
+            .send('{not-json')
+    );
+
+    assert.equal(response.status, 400);
+    assert.match(response.body.error, /invalid JSON/i);
+});
+
+test('POST /api/style-guide payload too large -> 413 (not 500)', async () => {
+    const vault = setupVault();
+    writeFileSync(join(vault, 'personal-style-guide.md'), 'old');
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent()
+            .post('/api/style-guide')
+            .set('Content-Type', 'application/json')
+            .send({ content: 'x'.repeat(1_100_000), expectedHash: 'whatever' })
+    );
+
+    assert.equal(response.status, 413);
+    assert.match(response.body.error, /too large/i);
+});
+
+test('POST /api/style-guide existing file without expectedHash -> 400 (no silent overwrite)', async () => {
+    const vault = setupVault();
+    writeFileSync(join(vault, 'personal-style-guide.md'), 'protected content');
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().post('/api/style-guide').send({ content: 'replacement' })
+    );
+
+    assert.equal(response.status, 400);
+    assert.match(response.body.error, /expectedHash required/i);
+    // verify file NOT changed
+    assert.equal(readFileSync(join(vault, 'personal-style-guide.md'), 'utf8'), 'protected content');
+});
+
+test('POST /api/scenario-overrides existing file without expectedHash -> 400 (no silent overwrite)', async () => {
+    const vault = setupVault();
+    const overridesDir = join(vault, 'scenario-overrides');
+    mkdirSync(overridesDir, { recursive: true });
+    writeFileSync(join(overridesDir, 'landing.md'), 'protected override');
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().post('/api/scenario-overrides/landing').send({ content: 'replacement' })
+    );
+
+    assert.equal(response.status, 400);
+    assert.match(response.body.error, /expectedHash required/i);
+    assert.equal(readFileSync(join(overridesDir, 'landing.md'), 'utf8'), 'protected override');
+});
+
+test('POST /api/cases sourceImagePath in /etc/ -> 400 (system path forbidden)', async () => {
+    const vault = setupVault();
+    mkdirSync(join(vault, 'clients', '_personal'), { recursive: true });
+    writeFileSync(join(vault, 'clients', '_personal', 'meta.yaml'),
+        'schema_version: 2\nslug: _personal\nname: Personal\ntype: self\ncreated_at: "2026-05-03"\nnotes: ""\ntheme_color: "#1F2937"\n');
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().post('/api/cases').send({
+            client: '_personal',
+            slug: 'attack',
+            sentiment: 'positive',
+            scenario: 'landing',
+            quote: 'try',
+            sourceImagePath: '/etc/passwd'
+        })
+    );
+
+    assert.equal(response.status, 400);
+    assert.match(response.body.error, /forbidden system path/i);
+    // verify no file was written
+    assert.equal(existsSync(join(vault, 'clients', '_personal', 'cases', 'attack', 'snapshot')), false);
+});
+
+test('PUT /api/clients/:slug with slug field -> 400 (cannot change slug, no silent ignore)', async () => {
+    const vault = setupVault();
+    mkdirSync(join(vault, 'clients', 'aicycle'), { recursive: true });
+    writeFileSync(join(vault, 'clients', 'aicycle', 'meta.yaml'),
+        'schema_version: 2\nslug: aicycle\nname: Aicycle\ntype: client\ncreated_at: "2026-05-03"\nnotes: ""\ntheme_color: "#1F2937"\n');
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().put('/api/clients/aicycle').send({ slug: 'hacked', name: 'still updates?' })
+    );
+
+    assert.equal(response.status, 400);
+    assert.match(response.body.error, /cannot change slug/i);
+});
+
+test('POST /api/clients oversized slug (>64 chars) -> 400', async () => {
+    const vault = setupVault();
+    const longSlug = 'a'.repeat(100);
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().post('/api/clients').send({
+            slug: longSlug,
+            name: 'X',
+            type: 'client',
+            theme_color: '#1F2937'
+        })
+    );
+
+    assert.equal(response.status, 400);
+    assert.match(response.body.error, /invalid slug/i);
+});

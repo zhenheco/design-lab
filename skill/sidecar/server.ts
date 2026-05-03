@@ -27,6 +27,20 @@ const healthLogMiddleware: RequestHandler = (req, res, next) => {
 
 const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
     const message = error instanceof Error ? error.message : 'Internal Server Error';
+
+    if (error instanceof SyntaxError && 'body' in (error as object)) {
+        res.status(400).json({ error: 'invalid JSON' });
+        return;
+    }
+
+    const errType = (error as { type?: string }).type;
+    const errStatus = (error as { status?: number; statusCode?: number }).status
+        ?? (error as { status?: number; statusCode?: number }).statusCode;
+    if (errType === 'entity.too.large' || errStatus === 413) {
+        res.status(413).json({ error: 'payload too large' });
+        return;
+    }
+
     res.status(500).json({ error: message });
 };
 

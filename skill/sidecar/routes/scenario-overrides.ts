@@ -74,6 +74,12 @@ export function scenarioOverridesRouter(): Router {
         const overridePath = getScenarioOverridePath(scenario);
         const currentContent = existsSync(overridePath) ? readFileSync(overridePath, 'utf8') : null;
         const currentHash = currentContent === null ? null : hashContent(currentContent);
+
+        // 既有 override → expectedHash 必傳防 lost-update
+        if (currentHash !== null && body.expectedHash === undefined) {
+            res.status(400).json({ error: 'expectedHash required when scenario override exists' });
+            return;
+        }
         if (body.expectedHash !== undefined && body.expectedHash !== currentHash) {
             res.status(409).json({ error: 'scenario override hash conflict' });
             return;

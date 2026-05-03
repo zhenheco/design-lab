@@ -36,9 +36,11 @@ export function getIndexDbPath(): string {
 }
 
 const SLUG_RE = /^[a-z0-9_-]+$/;
+const SLUG_MAX_LENGTH = 64;
 
 export function isValidSlug(slug: string): boolean {
   if (!slug) return false;
+  if (slug.length > SLUG_MAX_LENGTH) return false;
   if (slug.includes('..')) return false;
   return SLUG_RE.test(slug);
 }
