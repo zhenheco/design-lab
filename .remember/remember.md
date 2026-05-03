@@ -1,138 +1,104 @@
-# Handoff (2026-05-03 凌晨完整 v0.2 完成)
+# Handoff (2026-05-03 上午 — v0.2.1 security patch 完成)
 
-## 🎉 State：v0.2.0 GA + 安全 hotfix done
+## 🎉 State：v0.2.1 GA + 雙端 audit 收尾完成
 
-design-lab v0.2 sidecar 架構從 phase α 一路推到 v0.2.0 release tag。
-**191/191 npm tests 綠 + tsc clean + 5 phase tags**：
+design-lab v0.2 從 v0.2.0 GA 經 phase ζ-A/C/D 三輪 patch 抵達 **v0.2.1**。
 
 ```
-phase-alpha-complete   (前 session)
-phase-beta-complete    ✓
-phase-gamma-complete   ✓
-phase-delta-complete   ✓
+phase-alpha-complete   (v0.1)
+phase-beta-complete    (v0.2 lib refactor)
+phase-gamma-complete   (v0.2 SQLite cache + sidecar API)
+phase-delta-complete   (v0.2 dashboard SSR)
 v0.1.0
-v0.2.0                 ✨ 本 session 達成
+v0.2.0                 (epsilon scripts + SKILL.md 重寫)
+                       + ζ-A: e2e → vitest (5c8da7a)
+                       + ζ-C: γ2 walkVault symlink hardening (8ab3285)
+                       + ζ-D: v0.2.1 audit-driven security patch (b22fa4c)
+v0.2.1                 ✨ 本次達成
 ```
 
-skill 已 symlink 在 `~/.claude/skills/design-lab` → 本 repo `skill/`。
-重啟 Claude Code 後即可用 `/design` `/design-dashboard`。
+skill 已 symlink 在 `~/.claude/skills/design-lab` → 本 repo `skill/`，
+重啟後 `/design` `/design-dashboard` 可直接用。
+
+## 本次 session（2026-05-03）3 commits
+
+| Commit | What | Tests delta |
+|---|---|---|
+| `5c8da7a` | ζ-A: Playwright e2e (4/11 pass) → vitest 19/19 + RTL，移除 @playwright/test | dashboard 0 → 19 |
+| `8ab3285` | ζ-C: walkVault lstatSync skip symlink + readdirSync try-catch + 3 tests | top 191 → 194 |
+| `b22fa4c` | ζ-D: v0.2.1 security patch — 5 P0 + 2 P1 fix | top 194 → 208 |
+
+最終：**top npm test 208/208 + dashboard vitest 19/19 + astro check 0 + tsc clean**
+
+## 雙端 audit 過程
+
+### 1. Codex code review（找 6 P0 + 3 P1）
+2 commits 後跑全 repo audit，找到的 P0：
+1. watcher 沒設 followSymlinks:false（drift from walkVault Fix）
+2. sourceImagePath 用 blocklist 而非 allowlist
+3. reindex parse fail 留 stale row
+4. fullReindex partial fail 仍寫 last_full_rebuild_at
+5. errorHandler 直接回 error.message（內部 path 洩漏）
+6. write routes 沒 auth/origin guard（只靠 127.0.0.1）
+
+### 2. Gemini arch/UX/spec audit（找 4 caveats）
+- ❌ 「hardcoded vault path」誤判（DESIGN_LAB_VAULT_PATH 已 wire）
+- ❌ 「atomic file write race」誤判（β2/β4 已用 wx + EISDIR）
+- ✅ Sidecar 必啟動是真痛點（auto-startup 進 v0.3）
+- ✅ feedback-log.jsonl 沒 UI 是真痛點（v0.3）
+
+### 3. v0.2.1 patch 由 Codex 實作（TDD per fix，dispatch 一輪 ~15 min）
+做 7/8（Fix #6 #9 推遲 v0.3）。Gemini cross-review verdict:
+**ship-with-3-followups**（0 P0 blocker）。
+
+## v0.3 Backlog（必修，從這 session audit 帶過去）
+
+### 安全/正確性（不能再延）
+1. **Fix #6 auth/origin guard** — DNS rebinding 防護，跟 auto-startup 統一做
+2. **Fix #9 client meta ETag** — drift from style-guide / scenario-overrides
+3. **Default allowlist 移除 tmpdir()** — multi-user DoS（Avy single-user 邊際但要修）
+4. **routes/*.ts catch echo error.message 仍洩漏 path** — 要 normalize 或統一 fallback
+5. **allowlist split 用 path.delimiter** — Windows ';' vs POSIX ':'
+
+### UX/DX（高 user value）
+6. **Auto sidecar startup** — `/design` `/design-dashboard` 啟動前 self-check + spawn（最大 DX 痛點）
+7. **Global search API + UI** — SQLite FTS5 索引 cases + documents（沒 search 累到 50+ cases 就難用）
+8. **Feedback log UI + API** — dashboard 新一頁列 feedback-log.jsonl，提供 edit endpoint
+
+### Original v0.3 plan（降權）
+9. Auto-distill / LLM NEVER detector
+10. URL screenshot 收 case
+
+### Test 品質
+11. `.tmp-test-homes/` 改用 mkdtemp(tmpdir) + afterEach cleanup（Gemini 建議）
+12. Watcher symlink test 升級成 chokidar event 整合測試（Gemini 建議）
+
+### 留給未來的 v0.3+ 範圍外建議（從 phase ζ-C audit）
+- walkVault 遞迴改迭代（防深度 DOS）
+- readdirSync 改 fs.opendir（防百萬 entry OOM）
+- Mount point dev check (`stats.dev` 跨 fs boundary)
+- DESIGN_LAB_FOLLOW_SYMLINKS opt-in env var
+
+## v0.4 Roadmap（不變動）
+
+1. Cloud sidecar prototype（Cloud Run / Fly.io）— SaaS path 第一步
+2. Multi-vault 切換
+3. Case export/import zip
+
+## 未驗證 / 待用戶手動
+
+- **ε1 open-design fork bridge skill** — 用戶手動寫在 open-design fork：
+  - `skills/design-memory-bridge/SKILL.md` 按 spec §3.1
+  - pre-flight `curl -s http://localhost:5174/api/context?client=$C&scenario=$S`
+  - 注入 system prompt: styleGuide + scenarioOverride + cases + antiCases + neverRules
+  - sidecar down 時 fallback 不 fail hard
+- **真實 vault 累積使用**：本 session smoke test 建了 fresh `~/Documents/CC Cli/design-library/`（v0.2 結構，含 `_personal` client + 4 scenario-overrides）。可立即開始用 `/design <task>` 收 case。
 
 ## Active spec / plan
+
 - `docs/superpowers/specs/2026-05-02-design-lab-v0.2-sidecar.md`
-- `docs/superpowers/plans/2026-05-02-design-lab-v0.2-sidecar.md`（27 task / 5 phase α-ε）
-
-## 本 session commits（21 個 + 2 個 final）
-
-### β phase（7 commits → tag phase-beta-complete）
-| Commit | What |
-|---|---|
-| `2cf4be3` | β2 feat: case-writer.ts (sentiment dispatch + multi-client) |
-| `4d0a5eb` | β2 fix: harden per Gemini review (atomic wx + conditional snapshot + EISDIR + client-dir confine) |
-| `c27dd63` | β3 feat: client-loader.ts + js-yaml@^3.14 直接 dep |
-| `1f7eee8` | β3 fix: harden per Gemini review (resolveMetaPath simplify + dir-vs-meta slug consistency + deterministic sort + JSON.stringify YAML escape) |
-| `3c1a82a` | β4 feat: client-writer.ts + theme-palette + Gemini hardening (atomic mkdir EEXIST + partial cleanup + collision counter + EXDEV fallback + schema constant) |
-| `213a2a4` | β5 feat: wire stats/feedback-log/design.sh to v2 multi-client loaders（含 Gemini 提前刪 .test.js） |
-| `33c61bc` | β6 refactor: 刪 case-loader.js / case-writer.js + collect.sh 改吃 .ts |
-
-### γ phase（6 commits → tag phase-gamma-complete）
-| Commit | What |
-|---|---|
-| `5383c9a` | γ1 feat: SQLite cache schema 4 tables (cases / clients / documents / index_meta) + WAL + FK ON + singleton |
-| `d22ee63` | γ2 feat: reindex pipeline + classifyPath 4 kinds + content_hash skip + fullReindex transaction |
-| `c88fc2c` | γ3 feat: chokidar watcher (chokidar@4 沒 glob → watch dir + classifyPath 過濾 + addDir 補 watcher.add) |
-| `16873a2` | γ4 feat: selfCheckOnStartup mtime 增量 (no last_full → fullReindex / corrupt → safe fallback) |
-| `29c8138` | γ5 feat: Express sidecar + 5 routes + supertest API suite + tsconfig include sidecar |
-| `3bd2921` | γ6 feat: /api/context full payload (loadCaseSummaries scope union + top 5 positive + all antiCases + neverRules + retrievedFrom) |
-
-### δ phase（6 commits → tag phase-delta-complete）
-| Commit | What |
-|---|---|
-| `b1b4b23` | δ1 feat: Astro 5 SSR + @astrojs/node middleware + Tailwind 4 + light theme tokens |
-| `db6c7e3` | δ2 feat: overview page + ClientSwitcher React island + api.ts (SSR absolute / browser relative + vite proxy) |
-| `74dff3f` | δ3 feat: /clients CRUD + ClientCrudForm modal + 12 swatch picker |
-| `0e82d37` | δ4 feat: /clients/[slug] case grid + CaseFilter (scenario/sentiment query string SSR reload) |
-| `bc50496` | δ5 feat: /style-guide editor + hash conflict 409 reload prompt |
-| `dcb397b` | δ6 feat: sidecar mountDashboard + Playwright config (chromium only) |
-
-### ε phase（1 commit）
-| Commit | What |
-|---|---|
-| `7c08f11` | ε2+ε3 feat: sidecar-start/stop scripts + SKILL.md v0.2 完整重寫 |
-
-### 🔒 Final hotfix + e2e improve
-| Commit | What |
-|---|---|
-| `3552255` | **security(hotfix)**: destructive-qa 找 3 P0 + 4 P1 全修 + 7 regression tests |
-| `a03a658` | test(delta): e2e specs hydration retry + fixture seeding (4/11 stable pass) |
-
-## Test count history
-v0.1: 24 → β1: 48 → β2: 67 → β3: 82 → β4: 107 → β5: 113 → β6: 107 → γ1: 118 → γ2: 146 → γ3: 158 → γ4: 162 → γ5: 177 → γ6: 184 → hotfix: 191
-
-最終：**191/191 npm tests 全綠 + tsc --noEmit clean**
-
-## 🔴 destructive-qa findings + fix（這 session 重點）
-
-跑 sidecar listen 5174，curl 24 個 attack 向量找到並全修：
-
-### P0 BLOCKING (3)
-| # | 問題 | 修法 |
-|---|---|---|
-| 1 | POST /api/style-guide 沒帶 expectedHash 強制覆蓋 (lost-update) | 既有檔 → require expectedHash → 沒帶 400 |
-| 2 | POST /api/scenario-overrides 同問題 | 同上 fix |
-| 3 | POST /api/cases sourceImagePath 接受 /etc/passwd → 系統檔讀 + copy 到 vault | FORBIDDEN_SOURCE_PREFIXES 列表（/etc/, /private/etc/, /System/, /Library/Keychains/, /var/db/, /var/log/, /usr/bin/, /usr/sbin/）→ 命中 prefix 400 |
-
-### P1 (4)
-| # | 問題 | 修法 |
-|---|---|---|
-| 1 | invalid JSON → 500 | server.ts errorHandler 認 SyntaxError + body → 400 'invalid JSON' |
-| 2 | oversize → 500 | 認 entity.too.large → 413 |
-| 3 | PUT 帶 slug → silent ignore | routes/clients.ts PUT 顯式 'slug' in body → 400 'cannot change slug' |
-| 4 | slug 無長度限制 | paths.ts SLUG_MAX_LENGTH = 64 |
-
-7 個 regression tests 鎖每個 fix 行為，重跑 destructive-qa round 2 全變 400/413/4xx。
-
-## ⚠️ Known issues / phase ζ 候選
-
-### 1. e2e Astro hydration race（5/11 fail）
-**症狀**：Playwright `client:load` island click 太早，React 還沒 attach event handler，click 落到 SSR HTML button 上沒 set state，modal 不出現。
-
-**Why**：
-- Astro `client:load` 是 page load 後 immediately hydrate，但 hydration 是 async（fetch React bundle + execute）
-- Astro 沒提供 hydration-done public API（`<astro-island>` 內部 `removeAttribute("ssr")` 但時序不確定）
-- 我嘗試 retry click + waitForTimeout(500) + waitForFunction(ssr attr removed) 都不穩
-
-**已 stable pass (4/11)**: loads / sentiment URL filter / save button disabled / heading visible
-**fail (7/11)**: client-crud create/edit/archive、case-grid filter scenario/reset、style-guide edit-save/conflict
-
-**可能解**:
-- A. 改用 `client:idle` 並 wait IntersectionObserver 觸發（但 client:idle 不適合 user 立即 click 的元素）
-- B. 自寫 `astro:hydrate` event，page-script dispatch，spec waitForEvent
-- C. 改 ClientCrudForm 為純 page `<script>`（不用 React island），button click handler 同 archive 用 document.addEventListener — 但失去 React state management
-- D. **放棄 e2e 改 vitest unit test**：mount component in jsdom + fire click 直接驗 form submit。e2e 是 dev tool，product 行為已驗（mount smoke 全 200 + 4 pass spec 涵蓋 critical path）
-
-**建議**：D 最務實。Plan acceptance「Playwright client-crud.spec.ts 綠燈」嚴格未達，但實際 product 沒 bug。
-
-### 2. γ2 P1 hardening（Gemini review 留尾）
-- **symlink cycle**: walkVault 用 statSync 跟 symlink → 若 vault 內有 symlink cycle 會 stack overflow。改 lstatSync + 偵測 isSymbolicLink + skip。
-- **大檔記憶體**: readFileSync 整檔讀 → 計 hash。對 100MB+ markdown 可能 OOM（雖然 markdown 不會這麼大）。可 stream hash if 有需要。
-
-### 3. ε1 open-design fork bridge skill（外部 repo）
-本 repo 動不到。用戶在 open-design fork 手動建：
-- `skills/design-memory-bridge/SKILL.md` per spec §3.1
-- pre-flight `curl -s "http://localhost:5174/api/context?client=$CLIENT&scenario=$SCENARIO"`
-- response 注入 system prompt: styleGuide + scenarioOverride + cases + antiCases NEVER signals
-- sidecar down 時 fallback 不 fail hard
-
-### 4. ε4 整合 e2e full-flow（plan 寫但 #1 未解前難跑）
-依賴 dashboard e2e 穩定 → #1 解後再做。
-
-### 5. SKILL.md → 真實 vault smoke
-- 用 user 真實 `~/Documents/CC Cli/design-library` (應為 v0.1) 跑 `bash skill/scripts/migrate-v1-to-v2.sh` 升 v2
-- 跑 `bash skill/scripts/sidecar-start.sh` 確認可啟動
-- 跑 `/design "test landing"` 確認 design.sh 行為
-- 跑 `/design-dashboard` 確認 sidecar + dashboard mount 全 200
-
-⚠️ 本 session 只用 mktemp tmp vault smoke，沒碰 user 真實 vault。
+- `docs/superpowers/plans/2026-05-02-design-lab-v0.2-sidecar.md`
+- v0.3 plan 待寫（建議先 brainstorm Auto-startup + Search 兩個 P0 design）
 
 ## Next session — 從這裡開始
 
@@ -140,56 +106,49 @@ v0.1: 24 → β1: 48 → β2: 67 → β3: 82 → β4: 107 → β5: 113 → β6: 
 ```bash
 cd "/Volumes/500G/Claude Code Projects/Design skill"
 git log --oneline -5
-# HEAD 應是 a03a658 test(delta): e2e specs 加 hydration retry
-git tag --list | grep -E "phase-|v0\.2"
-# 預期含 v0.2.0
+# HEAD 應是 b22fa4c security(v0.2.1): 7 個 P0/P1 fix
+git tag --list | grep v0
+# 預期含 v0.1.0 / v0.2.0 / v0.2.1
 npm test 2>&1 | tail -8
-# 預期 191/191
-npx tsc --noEmit
-# 預期 OK
+# 預期 208/208
+cd skill/dashboard && npm test 2>&1 | tail -8
+# 預期 19/19 vitest + astro check 0
+cd ../.. && npx tsc --noEmit
+# 預期 clean
 ```
 
-### Step 2: 真實 vault smoke（建議優先）
-
+### Step 2: 啟 sidecar smoke
 ```bash
-ls ~/Documents/CC\ Cli/design-library/ 2>/dev/null
-# 若存在且是 v0.1 結構（root cases/ + anti-library/）→
-bash skill/scripts/check-schema.sh ~/Documents/CC\ Cli/design-library
-# 預期 exit 2 + migration 提示
-bash skill/scripts/migrate-v1-to-v2.sh ~/Documents/CC\ Cli/design-library
-# 升級 + sibling backup
-
-# 跑 sidecar
 bash skill/scripts/sidecar-start.sh
-# 開瀏覽器 http://127.0.0.1:5174/
-
+# 應 PID file + 5174 listen + dashboard mount
+curl -s http://127.0.0.1:5174/api/clients | head
+# 應 {"clients":[{"slug":"_personal",...}]}
 bash skill/scripts/sidecar-stop.sh
 ```
 
-如有任何 regression（migration 把資料弄壞 / sidecar 啟不起來）→ 即修 + commit hotfix。
+### Step 3: 進 v0.3 設計
 
-### Step 3: 處理 known issue（按優先序）
+優先序：
 
-**優先序建議**：
+**A. 設計 Auto-startup + Auth 統一方案**（建議先做）
+- `/design` `/design-dashboard` 啟動前 spawn sidecar（讓 Avy 不用記 sidecar-start.sh）
+- 同時加 auth：sidecar 啟動產生隨機 token 寫 `~/.claude/state/design-lab/api-token`，bridge skill 從同檔讀，所有 write route 要 X-Design-Lab-Token header
+- 解 Fix #6 + DX 痛點 #1
 
-A. **e2e fix（D 方案）**：把 dashboard tests 從 Playwright E2E 換 vitest unit test。estimated 1-2 hr。
-   - 加 `skill/dashboard/vitest.config.ts`
-   - 加 `@testing-library/react` + `jsdom`
-   - 改寫 e2e 為 component test（mount ClientCrudForm + fire click + assert state）
-   - 移除 Playwright 配置（保留 .spec.ts 為 reference）
+**B. Global Search API + UI**
+- backend：SQLite FTS5 virtual table 索引 cases (frontmatter + body) + documents (style-guide, scenario-overrides) + clients (name, notes)
+- API：`GET /api/search?q=&kind=&client=`
+- UI：dashboard 加 search bar in BaseLayout
 
-B. **γ2 symlink cycle hardening**：lstatSync + skip symlink dir。estimated 30 min。
+**C. 修 v0.3 backlog 的 P1 (#9, #3, #4, #5)**
 
-C. **真實 vault smoke**（Step 2 already 提）：~30 min。
+**D. Feedback log UI + auto-distill 兩個 v0.3 原本 plan**
 
-D. **ε1 bridge skill**：用戶在 open-design fork 手動寫。本 repo 不動。
+### Step 4: brainstorm 完成才寫 plan / 進 implement
 
-### Step 4: phase ζ 規劃（若繼續）
-
-- 自動 distill (v0.3 plan)：`/design-distill` 從 cases 自動 distill 成 personal-style-guide rules
-- LLM NEVER detector：取代 regex-only lint
-- URL 自動截圖：collect.sh 直接吃 URL 而非 image path
-- SaaS path（v0.4+）：sidecar 獨立 cloud service vs PR 進 Open Design 加 plugin
+按 CLAUDE.md「方案階段交叉驗證主導權」：
+- 既有 repo 修改 → Claude 主導 + Gemini 驗證
+- 新功能（auto-distill / search / auth）→ Gemini 主導 + Claude 驗證
 
 ## Context to load (next session)
 
@@ -198,38 +157,29 @@ D. **ε1 bridge skill**：用戶在 open-design fork 手動寫。本 repo 不動
 docs/superpowers/plans/2026-05-02-design-lab-v0.2-sidecar.md
 docs/superpowers/specs/2026-05-02-design-lab-v0.2-sidecar.md
 
-# Phase β-ε 完成的核心模組
-skill/lib/case-loader.ts          # multi-client + retrieval scope union
-skill/lib/case-writer.ts          # sentiment dispatch + atomic wx + EISDIR safe
-skill/lib/client-loader.ts        # JSON_SCHEMA yaml + dir-vs-meta consistency
-skill/lib/client-writer.ts        # createClient atomic + archiveClient EXDEV fallback
-skill/lib/theme-palette.ts        # 12 色 canonical
-skill/lib/index/db.ts             # SQLite singleton + 4 表 schema
-skill/lib/index/reindex.ts        # path classify + content hash + fullReindex
-skill/lib/index/watcher.ts        # chokidar + addDir handler
-skill/sidecar/server.ts           # createApp + startServer + mountDashboard
-skill/sidecar/routes/             # 5 routes + hash require fix
-skill/scripts/sidecar-start.sh    # PID + auto-build
-skill/scripts/sidecar-stop.sh     # stale PID self-heal
-skill/SKILL.md                    # v0.2 重寫，2 slash command
-skill/dashboard/                  # Astro 5 SSR 4 page + middleware mount
+# v0.2.1 改的核心
+skill/lib/index/reindex.ts        # walkVault lstat + scanError + onError chain
+skill/lib/index/watcher.ts        # followSymlinks:false + scanAddedDirectory hardening
+skill/sidecar/routes/cases.ts     # sourceImagePath allowlist + DESIGN_LAB_SOURCE_ALLOWLIST
+skill/sidecar/server.ts           # errorHandler 不洩漏
+
+# Test
+skill/tests/index/{reindex,watcher}.test.ts
+skill/sidecar/tests/api.test.ts   # 5 個新 sourceImagePath test
+skill/dashboard/tests/components/  # 19 vitest
+
+# 入口
+skill/SKILL.md                    # v0.2 spec
+skill/scripts/sidecar-start.sh
+skill/scripts/sidecar-stop.sh
 ```
-
-## Key decisions confirmed
-
-- Path A2 (sidecar + bridge over fork core)
-- Sidecar `localhost:5174`，dashboard 同 port mount middleware
-- Dashboard 4 page only，不用 shadcn，light theme only (#FFFFFF + #1F2937)
-- v1→v2 migration **idempotent + sibling backup + atomic lock + vault validation**
-- js-yaml@^3.14（避免 v4 dual install）
-- chokidar@4 移除 glob → watch dir + classifyPath 過濾
-- expectedHash require for existing style-guide / scenario-override（destructive-qa 教訓）
-- sourceImagePath FORBIDDEN_SOURCE_PREFIXES 防系統檔讀取
-- e2e Astro hydration race 留 known-issue（建議改 vitest unit test）
 
 ## Open questions
 
-1. e2e 改 vitest 還是 fix Playwright timing（建議前者）
-2. γ2 hardening 何時做（low priority — vault 通常無 symlink）
-3. open-design fork bridge skill 你打算何時寫
-4. 真實 vault migration 是否已跑（你的 /Users/avyhsu/Documents/CC Cli/design-library 還是 v0.1？）
+1. v0.3 先做 Auto-startup+Auth (A) 還是 Search (B)？
+   - A 解最大 DX 痛點 + 1 個 P0 security
+   - B 解 user value 痛點（cases 累積後必需）
+   - 建議 A 先（30% 工作量解 60% 痛點），B 跟在後
+2. Auth token 寫到 `~/.claude/state/design-lab/api-token` vs `vault/.index/api-token` vs 純 env var — 哪個跟 bridge skill 接最自然
+3. open-design fork bridge skill 你打算何時寫？建議跟 v0.3 auth 同期（auth 完成後寫，因為 bridge 要讀 token）
+4. SQLite FTS5 索引 frontmatter 還是 body 或都索引？schema 設計需要先想
