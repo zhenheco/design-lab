@@ -1,16 +1,16 @@
 ---
 name: design-lab
-description: 個人化品牌設計系統 skill — multi-client cases + Astro local dashboard + sidecar HTTP bridge for Open Design integration. v0.2 sidecar 架構：每個 client 獨立累積喜歡/不喜歡的設計、自動演化「Avy 設計法則」、`/api/context` 提供 retrieval-scoped payload 給 Open Design 注入 prompt。Memory 在 ~/Documents/CC Cli/design-library/。
-version: 0.2.0
+description: 個人化品牌設計系統 skill — multi-client cases + Astro local dashboard + authenticated sidecar HTTP bridge for Open Design integration. v0.3 auto-auth 架構：`/design` 自動 ensure sidecar、cold spawn 旋轉 local API token、`/api/context` 提供 retrieval-scoped payload 給 Open Design 注入 prompt。Memory 在 ~/Documents/CC Cli/design-library/。
+version: 0.3.0
 ---
 
-# design-lab v0.2 — sidecar 架構
+# design-lab v0.3 — sidecar auto-auth 架構
 
 個人化品牌設計系統。三大組件：
 
 1. **Multi-client vault**：v0.2 schema_version=2，每個 client 獨立 `cases/` + `anti-library/`，retrieval scope 自動 union（type:self clients 跨 client 共享）。
-2. **Sidecar daemon**（Express + SQLite + chokidar，`localhost:5174`）：watch vault → SQLite cache → 5 個 API + dashboard SSR mount。
-3. **Local dashboard**（Astro 5 SSR + Tailwind 4，從 sidecar 同 port serve）：4 page UI（overview / clients CRUD / case grid / style-guide editor）。
+2. **Sidecar daemon**（Express + SQLite + chokidar，`localhost:5174`）：watch vault → SQLite cache → 5 個 API + dashboard SSR mount；v0.3 起有 host allowlist + write-route token auth。
+3. **Local dashboard**（Astro 5 SSR + Tailwind 4，從 sidecar 同 port serve）：4 page UI（overview / clients CRUD / case grid / style-guide editor），SSR 注入 API token 給 CSR fetch。
 
 **Memory 庫位置**：`~/Documents/CC Cli/design-library/`（Obsidian vault 內）。
 
@@ -18,7 +18,7 @@ version: 0.2.0
 
 ## 啟動 hook
 
-每個 slash command 第一個動作都跑 schema check：
+每個 slash command 第一個動作都跑 schema check；v0.3 起 `/design` 在 schema check 後會自動 ensure sidecar，讓 Open Design bridge skill 在 generation pre-flight 可抓 context：
 
 ```bash
 bash $SKILL_DIR/scripts/check-schema.sh "$HOME/Documents/CC Cli/design-library"
@@ -30,9 +30,17 @@ bash $SKILL_DIR/scripts/check-schema.sh "$HOME/Documents/CC Cli/design-library"
 
 **如 vault 是 v1 結構**（root `cases/` + `anti-library/`，無 `clients/`）：check-schema 會提示跑 `bash $SKILL_DIR/scripts/migrate-v1-to-v2.sh "$HOME/Documents/CC Cli/design-library"`，自動把 root cases 搬到 `clients/_personal/cases/`，sibling 備份原 vault。
 
+`/design` 專用 auto-spawn：
+
+```bash
+bash $SKILL_DIR/scripts/ensure-sidecar.sh
+```
+
+spawn 失敗時 `design.sh` fail soft，只提示 bridge 將 fallback 到 no-memory generation，不阻塞本次 design。
+
 ---
 
-## Slash commands（v0.2 只保留 2 個）
+## Slash commands（v0.3 只保留 2 個）
 
 ### `/design <task description>` — 主入口
 
@@ -46,11 +54,12 @@ bash $SKILL_DIR/scripts/design.sh "<task description>"
 
 `design.sh` 行為：
 1. 跑 schema check（exit 2 提示 migration / exit 1 致命）
-2. 印 task description
-3. 印 `personal-style-guide.md` 全文（DO / NEVER / SOMETIMES 給 Claude）
-4. 透過 `node --import tsx` 載入 `lib/case-loader.ts`，輸出 `cases/ frontmatter summary`（含 client / slug / scenario / quotes / tags / palette）
-5. 印 case_count（用 `find clients/*/cases/*.md`）+ fallback flag
-6. 印 INSTRUCTIONS：Claude 從 summary 挑 top 5 → 載 scenario-override → 產出 design → 跑 lint
+2. v0.3: 開頭自動 `ensure-sidecar.sh`（fail soft），給 bridge skill 抓 context；cold spawn 會產生 token 並啟 sidecar
+3. 印 task description
+4. 印 `personal-style-guide.md` 全文（DO / NEVER / SOMETIMES 給 Claude）
+5. 透過 `node --import tsx` 載入 `lib/case-loader.ts`，輸出 `cases/ frontmatter summary`（含 client / slug / scenario / quotes / tags / palette）
+6. 印 case_count（用 `find clients/*/cases/*.md`）+ fallback flag
+7. 印 INSTRUCTIONS：Claude 從 summary 挑 top 5 → 載 scenario-override → 產出 design → 跑 lint
 
 **Claude 接著做**：
 - 從 summary 挑跟 task 相似的 top 5 cases
@@ -65,7 +74,7 @@ bash $SKILL_DIR/scripts/design.sh "<task description>"
 
 ### `/design-dashboard` — 啟動 local dashboard
 
-**做什麼**：啟 sidecar daemon (port 5174) + dashboard，瀏覽器開 `http://localhost:5174/`。
+**做什麼**：啟 authenticated sidecar daemon (port 5174) + dashboard，瀏覽器開 `http://localhost:5174/`。v0.3 起 `sidecar-start.sh` 內部委派 `ensure-sidecar.sh`，保留舊入口向後相容。
 
 執行：
 
@@ -75,12 +84,20 @@ bash $SKILL_DIR/scripts/sidecar-start.sh
 
 Script 行為：
 1. vault 不存在 → 提示先跑 init-library.sh，exit 1
-2. 已 running（PID file 偵測）→ 直接印 URL
-3. dashboard dist 不存在 → 自動 `cd dashboard && npm install && npm run build`
-4. spawn `node --import tsx sidecar/server.ts`（背景）
-5. 寫 PID 到 `~/.claude/state/design-lab/sidecar.pid`
-6. poll `http://127.0.0.1:5174/api/clients` 最多 10s 等 ready
-7. 印 PID + URL + log path
+2. 委派 `ensure-sidecar.sh`
+3. 已 running（PID file + `/api/health` 偵測）→ 直接印 URL
+4. dashboard dist 不存在 → 自動 `cd dashboard && npm install && npm run build`
+5. cold spawn 時產生 API token，寫 `~/.claude/state/design-lab/api-token`（0600），並 export 給 sidecar process
+6. spawn `node --import tsx sidecar/server.ts`（背景）
+7. 寫 PID 到 `~/.claude/state/design-lab/sidecar.pid`
+8. poll `http://127.0.0.1:5174/api/health` 最多 10s 等 ready
+9. 印 PID + URL + log path
+
+Auth 行為：
+- `GET /api/health` 不需 auth。
+- API host 必須符合 allowlist（default 包含 `127.0.0.1:5174`、`localhost:5174`、`localhost:4322`，case-insensitive）。
+- `POST` / `PUT` / `DELETE` write route 必須帶 `X-Design-Lab-Token`。
+- Dashboard SSR 會把 `DESIGN_LAB_API_TOKEN` 注入 `<meta name="design-lab-token">`，CSR fetch 自動帶 token；401 時 reload 一次後清旗標。
 
 **4 個 dashboard page**：
 - `/` — overview（totals / byClient / scenarios / recent cases / ClientSwitcher）
@@ -148,7 +165,9 @@ Stale PID 會自動 self-heal（清 PID file 後可重啟）。
 Sidecar 提供 `/api/context?client=X&scenario=Y` 讓 open-design fork 內 `design-memory-bridge` skill 在 generation pre-flight 抓 context：
 
 ```bash
-curl -s "http://localhost:5174/api/context?client=$CLIENT&scenario=$SCENARIO"
+TOKEN="$(cat "$HOME/.claude/state/design-lab/api-token")"
+curl -s "http://127.0.0.1:5174/api/context?client=$CLIENT&scenario=$SCENARIO" \
+  -H "X-Design-Lab-Token: $TOKEN"
 ```
 
 Response shape：
@@ -165,9 +184,34 @@ Response shape：
 }
 ```
 
-Bridge skill 把 `styleGuide` + `scenarioOverride` 注入 system prompt、把 `cases` 當參考、`antiCases` 提示 NEVER。詳見 spec §3.1 / §4.3。
+Bridge skill 把 `styleGuide` + `scenarioOverride` 注入 system prompt、把 `cases` 當參考、`antiCases` 提示 NEVER。用戶寫 open-design fork bridge 時必須按 v0.3 spec §3.4 bridge contract + §4.1 `design-memory-bridge` SKILL.md template：
+- 從 `$HOME/.claude/state/design-lab/api-token` 讀 token。
+- `GET /api/context` 帶 `X-Design-Lab-Token`。
+- 401 時重新讀 token 並 retry 一次。
+- 不要詢問、印出、寫入或旋轉 token；token lifecycle 由 design-lab `ensure-sidecar.sh` 管。
 
 Sidecar 不可用時 bridge 應 fallback 到無記憶 generation 而非 fail hard。
+
+DELETE route 也是 write route；bridge skill 或 fork helper 若未來要呼叫 DELETE，必須先讀 token 並帶 `X-Design-Lab-Token`。
+
+---
+
+## Auth & Auto-spawn (v0.3+)
+
+Token lifecycle：
+- 每次 cold spawn 由 `ensure-sidecar.sh` 產生新的 32-byte hex token。
+- token 寫到 `$HOME/.claude/state/design-lab/api-token`，`umask 077` + `chmod 600`。
+- token 透過 `DESIGN_LAB_API_TOKEN` export 給 sidecar process；dashboard SSR 從同 env 注入 meta token。
+- 已健康運行的 sidecar 不重生、不旋轉 token；PID stale 或 sidecar dead 時清 PID 後 cold spawn 旋轉。
+
+Host allowlist：
+- default allowlist：`127.0.0.1:5174`、`localhost:5174`、`localhost:4322`。
+- compare case-insensitive；可用 `DESIGN_LAB_HOST_ALLOWLIST` 覆寫。
+
+Failure mode：
+- `/design` 的 auto-spawn 失敗 → `design.sh` fail soft，bridge fallback 到 no-memory generation，CLI design 繼續。
+- Dashboard CSR fetch 遇 401 → reload once，讓 SSR 讀新 token 後重試；成功 200 後清 reload flag。
+- Fork bridge skill sidecar down、token 讀不到、non-2xx 或 retry 後仍 401 → fallback no-memory，不 fail hard。
 
 ---
 
@@ -175,6 +219,8 @@ Sidecar 不可用時 bridge 應 fallback 到無記憶 generation 而非 fail har
 
 - `DESIGN_LAB_VAULT_PATH`：default `$HOME/Documents/CC Cli/design-library`
 - `DESIGN_LAB_STATE_PATH`：default `$HOME/.claude/state/design-lab/`（PID file + last-artifact.txt 等 transient state）
+- `DESIGN_LAB_API_TOKEN`：sidecar write-route auth token；由 `ensure-sidecar.sh` cold spawn 自動生成並 export，不需 user 手動設定
+- `DESIGN_LAB_HOST_ALLOWLIST`：optional override，覆寫 sidecar API Host allowlist（逗號分隔）
 
 ---
 
@@ -201,9 +247,9 @@ npx playwright test
 
 ---
 
-## v0.2 已知限制
+## v0.3 已知限制 / v0.4 backlog
 
 - E2E specs 部分 selector 待修（不擋 phase tag）
 - bridge skill 在 open-design fork 待寫（用戶手動補）
-- v0.3：自動 distill、LLM NEVER detector、URL 截圖
+- v0.4：Global Search FTS5、Feedback log UI、自動 distill、LLM NEVER detector、URL 截圖
 - v0.4+：SaaS 化（multi-tenant、auth、cloud sidecar）
