@@ -12,6 +12,10 @@ SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Step 1: schema check
 bash "$SKILL_DIR/scripts/check-schema.sh" "$VAULT" || exit $?
 
+# v0.3: 自動 ensure sidecar，給 bridge skill 抓 context；fail soft
+bash "$SKILL_DIR/scripts/ensure-sidecar.sh" || \
+    echo "[design] sidecar 啟動失敗，bridge 將 fallback to no-memory" >&2
+
 # Step 2: 輸出載入資料給 Claude（stdout 是 Claude 看的）
 echo "=== TASK ==="
 echo "$TASK"
@@ -22,7 +26,7 @@ echo ""
 echo "=== cases/ frontmatter summary ==="
 V_PATH="$VAULT" S_PATH="$SKILL_DIR" node --import tsx --input-type=module -e "
     import { join } from 'node:path';
-    import { loadCaseSummaries } from join(process.env.S_PATH, 'lib/case-loader.ts');
+    const { loadCaseSummaries } = await import(join(process.env.S_PATH, 'lib/case-loader.ts'));
     const all = loadCaseSummaries(process.env.V_PATH);
     console.log(JSON.stringify(all.map(c => ({
         client: c.client,

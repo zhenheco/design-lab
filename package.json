@@ -4,7 +4,7 @@
   "description": "Personal brand design system Claude Code skill",
   "type": "module",
   "scripts": {
-    "test": "node --test --import tsx \"skill/tests/**/*.test.{js,ts}\" \"skill/sidecar/tests/**/*.test.ts\"",
+    "test": "node --test --import tsx \"skill/tests/**/*.test.{js,ts}\" \"skill/sidecar/tests/**/*.test.ts\" \"skill/scripts/tests/**/*.test.ts\"",
     "test:dashboard": "cd skill/dashboard && npm test",
     "test:e2e": "cd skill/dashboard && npm run test:e2e",
     "deploy": "bash deploy.sh"
