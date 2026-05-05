@@ -1,4 +1,5 @@
 const SIDECAR_URL = import.meta.env.SSR ? (process.env.SIDECAR_URL || 'http://127.0.0.1:5174') : '';
+const RELOAD_FLAG = 'design-lab-reloaded';
 
 export interface ClientMeta {
     schema_version: 2;
@@ -32,8 +33,40 @@ type CasesQuery = {
     sentiment?: 'positive' | 'negative';
 };
 
+export async function authFetch(input: string | URL, init?: RequestInit): Promise<Response> {
+    const headers = new Headers(init?.headers);
+    const token = readToken();
+    if (token) {
+        headers.set('X-Design-Lab-Token', token);
+    }
+
+    const res = await fetch(input, { ...init, headers });
+    if (res.ok && typeof window !== 'undefined') {
+        sessionStorage.removeItem(RELOAD_FLAG);
+    }
+    if (res.status === 401 && typeof window !== 'undefined') {
+        if (!sessionStorage.getItem(RELOAD_FLAG)) {
+            sessionStorage.setItem(RELOAD_FLAG, '1');
+            window.location.reload();
+        }
+    }
+
+    return res;
+}
+
+function readToken(): string | null {
+    if (typeof window === 'undefined') {
+        const token = process.env.DESIGN_LAB_API_TOKEN;
+        return token && token.length > 0 ? token : null;
+    }
+
+    const meta = document.querySelector('meta[name="design-lab-token"]');
+    const token = meta?.getAttribute('content') ?? '';
+    return token.length > 0 ? token : null;
+}
+
 export async function fetchClients(): Promise<ClientMeta[]> {
-    const res = await fetch(`${SIDECAR_URL}/api/clients`);
+    const res = await authFetch(`${SIDECAR_URL}/api/clients`);
     if (!res.ok) {
         throw new Error(`fetch clients failed: ${res.status}`);
     }
@@ -54,7 +87,7 @@ export async function createClient(input: {
     theme_color: string;
     notes?: string;
 }): Promise<{ slug: string; metaPath: string }> {
-    const res = await fetch(`${SIDECAR_URL}/api/clients`, {
+    const res = await authFetch(`${SIDECAR_URL}/api/clients`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input)
@@ -76,7 +109,7 @@ export async function updateClient(
         notes?: string;
     }
 ): Promise<{ slug: string }> {
-    const res = await fetch(`${SIDECAR_URL}/api/clients/${encodeURIComponent(slug)}`, {
+    const res = await authFetch(`${SIDECAR_URL}/api/clients/${encodeURIComponent(slug)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch)
@@ -90,7 +123,7 @@ export async function updateClient(
 }
 
 export async function archiveClient(slug: string): Promise<{ slug: string; archivePath: string }> {
-    const res = await fetch(`${SIDECAR_URL}/api/clients/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+    const res = await authFetch(`${SIDECAR_URL}/api/clients/${encodeURIComponent(slug)}`, { method: 'DELETE' });
 
     if (!res.ok) {
         throw new Error(await readApiError(res));
@@ -113,7 +146,7 @@ export async function fetchCases(opts?: CasesQuery): Promise<CaseSummary[]> {
 
     const query = params.toString();
     const url = `${SIDECAR_URL}/api/cases${query ? `?${query}` : ''}`;
-    const res = await fetch(url);
+    const res = await authFetch(url);
     if (!res.ok) {
         throw new Error(`fetch cases failed: ${res.status}`);
     }
@@ -123,7 +156,7 @@ export async function fetchCases(opts?: CasesQuery): Promise<CaseSummary[]> {
 }
 
 export async function fetchStyleGuide(): Promise<StyleGuideDoc> {
-    const res = await fetch(`${SIDECAR_URL}/api/style-guide`);
+    const res = await authFetch(`${SIDECAR_URL}/api/style-guide`);
     if (!res.ok) {
         throw new Error(`fetch style-guide failed: ${res.status}`);
     }
@@ -132,7 +165,7 @@ export async function fetchStyleGuide(): Promise<StyleGuideDoc> {
 }
 
 export async function saveStyleGuide(content: string, expectedHash: string): Promise<{ contentHash: string }> {
-    const res = await fetch('/api/style-guide', {
+    const res = await authFetch('/api/style-guide', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content, expectedHash })

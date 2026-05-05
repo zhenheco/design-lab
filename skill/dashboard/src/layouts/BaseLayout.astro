@@ -6,6 +6,7 @@ interface Props {
 }
 
 const { title = 'Design Lab Dashboard' } = Astro.props;
+const apiToken = process.env.DESIGN_LAB_API_TOKEN ?? '';
 ---
 
 <!doctype html>
@@ -13,6 +14,8 @@ const { title = 'Design Lab Dashboard' } = Astro.props;
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="design-lab-token" content={apiToken} />
+        <meta http-equiv="Cache-Control" content="no-store" />
         <title>{title}</title>
     </head>
     <body class="min-h-screen">

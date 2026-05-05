@@ -70,31 +70,100 @@ Host allowlist: `['127.0.0.1:5174', 'localhost:5174', 'localhost:4322']`（最�
 - 失敗 fallback: design.sh 接受 spawn fail → 印 warning「sidecar 啟動失敗，bridge 將 fallback to no-memory」→ 繼續純 vault 讀
 
 ### 3.4 Bridge skill contract
-寫進 `docs/superpowers/specs/2026-05-05-design-lab-v0.3-auto-auth.md` §4 與 SKILL.md 章節，open-design fork 照寫：
+open-design fork 需要在 generation pre-flight 階段用 sidecar retrieval context。contract 必須 fail soft：任何 token 讀取失敗、sidecar 未啟動、非 2xx、schema 不符，都回到 no-memory generation，不阻斷主流程。
 
 ```typescript
-// pseudo-code, bridge skill 內邏輯
-const tokenPath = `${process.env.HOME}/.claude/state/design-lab/api-token`;
-let token: string | null = null;
-try {
-    token = fs.readFileSync(tokenPath, 'utf-8').trim();
-} catch {
-    return null;  // fallback to no-memory generation
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+
+const SIDECAR_URL = process.env.DESIGN_LAB_SIDECAR_URL ?? 'http://127.0.0.1:5174';
+const TOKEN_PATH = `${homedir()}/.claude/state/design-lab/api-token`;
+
+export interface DesignLabContext {
+    client?: unknown;
+    cases?: unknown[];
+    styleGuide?: unknown;
 }
 
-let resp = await fetch(`http://127.0.0.1:5174/api/context?client=${c}&scenario=${s}`, {
-    headers: { 'X-Design-Lab-Token': token }
-});
-
-if (resp.status === 401) {
-    // sidecar restarted, token rotated — re-read once
-    token = fs.readFileSync(tokenPath, 'utf-8').trim();
-    resp = await fetch(url, { headers: { 'X-Design-Lab-Token': token } });
+function readDesignLabToken(): string | null {
+    try {
+        const token = readFileSync(TOKEN_PATH, 'utf8').trim();
+        return token.length > 0 ? token : null;
+    } catch {
+        return null;
+    }
 }
 
-if (!resp.ok) return null;  // fallback
-return await resp.json();
+async function fetchContextOnce(url: URL, token: string): Promise<Response> {
+    return fetch(url, {
+        headers: {
+            'Accept': 'application/json',
+            'X-Design-Lab-Token': token
+        }
+    });
+}
+
+export async function loadDesignLabContext(input: {
+    client?: string;
+    scenario?: string;
+}): Promise<DesignLabContext | null> {
+    const url = new URL('/api/context', SIDECAR_URL);
+    if (input.client) url.searchParams.set('client', input.client);
+    if (input.scenario) url.searchParams.set('scenario', input.scenario);
+
+    let token = readDesignLabToken();
+    if (!token) return null;
+
+    try {
+        let resp = await fetchContextOnce(url, token);
+
+        if (resp.status === 401) {
+            // Token rotated after sidecar cold spawn. Re-read once, then fail soft.
+            token = readDesignLabToken();
+            if (!token) return null;
+            resp = await fetchContextOnce(url, token);
+        }
+
+        if (!resp.ok) return null;
+        return await resp.json() as DesignLabContext;
+    } catch {
+        return null;
+    }
+}
+
+export async function buildGenerationPrompt(basePrompt: string, input: {
+    client?: string;
+    scenario?: string;
+}): Promise<string> {
+    const context = await loadDesignLabContext(input);
+    if (!context) {
+        return basePrompt; // fallback to no-memory generation
+    }
+
+    return [
+        basePrompt,
+        '',
+        'Use this design-lab memory context as preference evidence:',
+        JSON.stringify(context, null, 2)
+    ].join('\n');
+}
 ```
+
+Failure mode pseudocode:
+
+```text
+context = loadDesignLabContext(client, scenario)
+if context == null:
+    prompt = buildPromptWithoutDesignMemory(userInput)
+else:
+    prompt = buildPromptWithDesignMemory(userInput, context)
+generate(prompt)
+```
+
+Fork placement:
+- open-design fork skill path: `open-design/skills/design-memory-bridge/SKILL.md`
+- helper implementation path: `open-design/skills/design-memory-bridge/lib/design-lab-context.ts`
+- bridge code must never write the token, rotate the token, or start the sidecar directly; startup is owned by design-lab `ensure-sidecar.sh`.
 
 ### 3.5 Dashboard token 注入
 - SSR 階段: `BaseLayout.astro` 讀 `process.env.DESIGN_LAB_API_TOKEN`，render `<meta name="design-lab-token" content="...">` 到 `<head>`
@@ -102,7 +171,98 @@ return await resp.json();
 - 401 處理: `api.ts` catch 401 → `window.location.reload()`（一次，避免 loop）
 - **不**放 `window.DESIGN_LAB_API_TOKEN` global（XSS 風險小但避免 anti-pattern）
 
-## 4. Acceptance
+> **P4 tech debt**: `<meta http-equiv="Cache-Control">` 在現代瀏覽器多被忽略，正解是 SSR 設 HTTP `Cache-Control: no-store` response header。P4 dev proxy / SKILL.md 處理時順帶補。
+
+## 4. Bridge skill template and acceptance
+
+### 4.1 Bridge skill SKILL.md template
+Copy this into the open-design fork at `open-design/skills/design-memory-bridge/SKILL.md`, then adjust the local command names to match the fork:
+
+````markdown
+# design-memory-bridge
+
+---
+name: design-memory-bridge
+---
+
+Use this skill when generating UI, visual systems, product pages, dashboards, or design assets where design-lab memory can improve taste alignment.
+
+## Design-lab bridge
+
+Before generation, try to load design-lab context from the local sidecar:
+
+1. Read token from `$HOME/.claude/state/design-lab/api-token`.
+2. Call `GET http://127.0.0.1:5174/api/context?client=<client>&scenario=<scenario>` with `X-Design-Lab-Token`.
+3. If the response is `401`, re-read the token once and retry once.
+4. If token read fails, fetch throws, response is non-2xx, or retry also fails, continue with no-memory generation.
+5. Never ask the user for the token and never print the token.
+
+Recommended helper path: `open-design/skills/design-memory-bridge/lib/design-lab-context.ts`.
+
+```typescript
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+
+const SIDECAR_URL = process.env.DESIGN_LAB_SIDECAR_URL ?? 'http://127.0.0.1:5174';
+const TOKEN_PATH = `${homedir()}/.claude/state/design-lab/api-token`;
+
+function readToken(): string | null {
+    try {
+        const token = readFileSync(TOKEN_PATH, 'utf8').trim();
+        return token || null;
+    } catch {
+        return null;
+    }
+}
+
+async function requestContext(url: URL, token: string): Promise<Response> {
+    return fetch(url, {
+        headers: {
+            'Accept': 'application/json',
+            'X-Design-Lab-Token': token
+        }
+    });
+}
+
+export async function loadDesignLabContext(input: {
+    client?: string;
+    scenario?: string;
+}): Promise<unknown | null> {
+    const url = new URL('/api/context', SIDECAR_URL);
+    if (input.client) url.searchParams.set('client', input.client);
+    if (input.scenario) url.searchParams.set('scenario', input.scenario);
+
+    let token = readToken();
+    if (!token) return null;
+
+    try {
+        let response = await requestContext(url, token);
+        if (response.status === 401) {
+            token = readToken();
+            if (!token) return null;
+            response = await requestContext(url, token);
+        }
+
+        if (!response.ok) return null;
+        return await response.json();
+    } catch {
+        return null;
+    }
+}
+```
+
+Generation flow:
+
+```text
+memory = await loadDesignLabContext({ client, scenario })
+if memory:
+    generate with design-lab evidence
+else:
+    generate normally without memory
+```
+````
+
+### 4.2 Acceptance
 
 整體 acceptance（v0.3 GA）：
 
