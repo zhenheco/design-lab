@@ -6,6 +6,9 @@ import { join } from 'node:path';
 import express from 'express';
 import request from 'supertest';
 import { createApp, errorHandler } from '../server.ts';
+import { authHeaders } from './helpers/auth-headers.ts';
+
+process.env.DESIGN_LAB_API_TOKEN = 'test-token-for-supertest';
 
 function setupVault() {
     const vault = mkdtempSync(join(tmpdir(), 'dl-sidecar-api-ts-'));
@@ -198,7 +201,7 @@ test('POST /api/clients valid -> 201 + slug', async () => {
     const vault = setupVault();
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().post('/api/clients').send({
+        createAgent().post('/api/clients').set(authHeaders()).send({
             slug: 'acme',
             name: 'Acme',
             type: 'client',
@@ -216,7 +219,7 @@ test('POST /api/clients invalid theme_color -> 400', async () => {
     const vault = setupVault();
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().post('/api/clients').send({
+        createAgent().post('/api/clients').set(authHeaders()).send({
             slug: 'bad-color',
             name: 'Bad Color',
             type: 'client',
@@ -233,7 +236,7 @@ test('PUT /api/clients/:slug -> 200', async () => {
     writeClientMeta(vault, 'acme');
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().put('/api/clients/acme').send({
+        createAgent().put('/api/clients/acme').set(authHeaders()).send({
             name: 'Acme Updated',
             notes: 'Updated notes'
         })
@@ -248,7 +251,7 @@ test('PUT /api/clients/:slug non-exist -> 404', async () => {
     const vault = setupVault();
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().put('/api/clients/missing').send({
+        createAgent().put('/api/clients/missing').set(authHeaders()).send({
             name: 'Missing'
         })
     );
@@ -261,7 +264,7 @@ test('DELETE /api/clients/:slug -> 200 + archivePath', async () => {
     const vault = setupVault();
     writeClientMeta(vault, 'acme');
 
-    const response = await withVaultEnv(vault, () => createAgent().delete('/api/clients/acme'));
+    const response = await withVaultEnv(vault, () => createAgent().delete('/api/clients/acme').set(authHeaders()));
 
     assert.equal(response.status, 200);
     assert.equal(response.body.slug, 'acme');
@@ -285,7 +288,7 @@ test('POST /api/cases valid -> 201', async () => {
     writeFileSync(fixture, 'png');
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().post('/api/cases').send({
+        createAgent().post('/api/cases').set(authHeaders()).send({
             client: 'acme',
             slug: '0001',
             sentiment: 'positive',
@@ -309,7 +312,7 @@ test('POST /api/cases missing client -> 400', async () => {
     writeFileSync(sourceImagePath, 'png');
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().post('/api/cases').send({
+        createAgent().post('/api/cases').set(authHeaders()).send({
             client: 'missing',
             slug: '0001',
             sentiment: 'positive',
@@ -340,7 +343,7 @@ test('POST /api/style-guide write -> 200 + new hash', async () => {
 
     const initial = await withVaultEnv(vault, () => createAgent().get('/api/style-guide'));
     const response = await withVaultEnv(vault, () =>
-        createAgent().post('/api/style-guide').send({
+        createAgent().post('/api/style-guide').set(authHeaders()).send({
             content: 'new content',
             expectedHash: initial.body.contentHash
         })
@@ -357,7 +360,7 @@ test('POST /api/style-guide hash conflict -> 409', async () => {
     writeFileSync(join(vault, 'personal-style-guide.md'), 'current content');
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().post('/api/style-guide').send({
+        createAgent().post('/api/style-guide').set(authHeaders()).send({
             content: 'new content',
             expectedHash: 'stale-hash'
         })
@@ -386,7 +389,7 @@ test('POST /api/scenario-overrides/:scenario -> 200', async () => {
     const vault = setupVault();
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().post('/api/scenario-overrides/landing').send({
+        createAgent().post('/api/scenario-overrides/landing').set(authHeaders()).send({
             content: 'Landing override'
         })
     );
@@ -527,6 +530,7 @@ test('POST /api/clients invalid JSON -> 400 (not 500)', async () => {
     const response = await withVaultEnv(vault, () =>
         createAgent()
             .post('/api/clients')
+            .set(authHeaders())
             .set('Content-Type', 'application/json')
             .send('{not-json')
     );
@@ -567,6 +571,7 @@ test('POST /api/style-guide payload too large -> 413 (not 500)', async () => {
     const response = await withVaultEnv(vault, () =>
         createAgent()
             .post('/api/style-guide')
+            .set(authHeaders())
             .set('Content-Type', 'application/json')
             .send({ content: 'x'.repeat(1_100_000), expectedHash: 'whatever' })
     );
@@ -580,7 +585,7 @@ test('POST /api/style-guide existing file without expectedHash -> 400 (no silent
     writeFileSync(join(vault, 'personal-style-guide.md'), 'protected content');
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().post('/api/style-guide').send({ content: 'replacement' })
+        createAgent().post('/api/style-guide').set(authHeaders()).send({ content: 'replacement' })
     );
 
     assert.equal(response.status, 400);
@@ -596,7 +601,7 @@ test('POST /api/scenario-overrides existing file without expectedHash -> 400 (no
     writeFileSync(join(overridesDir, 'landing.md'), 'protected override');
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().post('/api/scenario-overrides/landing').send({ content: 'replacement' })
+        createAgent().post('/api/scenario-overrides/landing').set(authHeaders()).send({ content: 'replacement' })
     );
 
     assert.equal(response.status, 400);
@@ -611,7 +616,7 @@ test('POST /api/cases sourceImagePath in /etc/ -> 400 (system path forbidden)', 
         'schema_version: 2\nslug: _personal\nname: Personal\ntype: self\ncreated_at: "2026-05-03"\nnotes: ""\ntheme_color: "#1F2937"\n');
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().post('/api/cases').send({
+        createAgent().post('/api/cases').set(authHeaders()).send({
             client: '_personal',
             slug: 'attack',
             sentiment: 'positive',
@@ -635,7 +640,7 @@ test('POST /api/cases sourceImagePath in TMPDIR -> 201 (allowlist default)', asy
     writeFileSync(sourceImagePath, 'png');
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().post('/api/cases').send({
+        createAgent().post('/api/cases').set(authHeaders()).send({
             client: '_personal',
             slug: 'tmp-allowed',
             sentiment: 'positive',
@@ -661,7 +666,7 @@ test('POST /api/cases sourceImagePath in ~/.ssh -> 400', async () => {
 
     const response = await withEnvVars({ HOME: fakeHome }, () =>
         withVaultEnv(vault, () =>
-            createAgent().post('/api/cases').send({
+            createAgent().post('/api/cases').set(authHeaders()).send({
                 client: '_personal',
                 slug: 'home-ssh-reject',
                 sentiment: 'positive',
@@ -688,7 +693,7 @@ test('POST /api/cases sourceImagePath traversal from screenshots -> 400', async 
 
     const response = await withEnvVars({ HOME: fakeHome }, () =>
         withVaultEnv(vault, () =>
-            createAgent().post('/api/cases').send({
+            createAgent().post('/api/cases').set(authHeaders()).send({
                 client: '_personal',
                 slug: 'traversal-reject',
                 sentiment: 'positive',
@@ -712,7 +717,7 @@ test('POST /api/cases sourceImagePath allowlist env override rejects default tmp
 
     const response = await withEnvVars({ DESIGN_LAB_SOURCE_ALLOWLIST: '/tmp/custom' }, () =>
         withVaultEnv(vault, () =>
-            createAgent().post('/api/cases').send({
+            createAgent().post('/api/cases').set(authHeaders()).send({
                 client: '_personal',
                 slug: 'override-default-reject',
                 sentiment: 'positive',
@@ -736,7 +741,7 @@ test('POST /api/cases sourceImagePath allowlist env override allows configured p
 
     const response = await withEnvVars({ DESIGN_LAB_SOURCE_ALLOWLIST: allowedRoot }, () =>
         withVaultEnv(vault, () =>
-            createAgent().post('/api/cases').send({
+            createAgent().post('/api/cases').set(authHeaders()).send({
                 client: '_personal',
                 slug: 'override-allowed',
                 sentiment: 'positive',
@@ -758,7 +763,7 @@ test('PUT /api/clients/:slug with slug field -> 400 (cannot change slug, no sile
         'schema_version: 2\nslug: aicycle\nname: Aicycle\ntype: client\ncreated_at: "2026-05-03"\nnotes: ""\ntheme_color: "#1F2937"\n');
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().put('/api/clients/aicycle').send({ slug: 'hacked', name: 'still updates?' })
+        createAgent().put('/api/clients/aicycle').set(authHeaders()).send({ slug: 'hacked', name: 'still updates?' })
     );
 
     assert.equal(response.status, 400);
@@ -770,7 +775,7 @@ test('POST /api/clients oversized slug (>64 chars) -> 400', async () => {
     const longSlug = 'a'.repeat(100);
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().post('/api/clients').send({
+        createAgent().post('/api/clients').set(authHeaders()).send({
             slug: longSlug,
             name: 'X',
             type: 'client',
