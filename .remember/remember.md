@@ -1,8 +1,8 @@
-# Handoff (2026-05-05 — v0.3 GA 收尾)
+# Handoff (2026-05-05 — v0.3 真 GA 完成)
 
-## State：v0.3 GA shipped，等待手動 tag
+## State：v0.3 真 GA shipped + bridge fork 已串通
 
-design-lab v0.3 Auto-startup + Auth 已完成。`v0.3.0` tag 待 Avy 手動建立。
+design-lab v0.3 Auto-startup + Auth 已完成、`v0.3.0` tag 已建（指向 P4 `8ff874e`）、open-design fork 內 `design-memory-bridge` skill 已 commit + smoke 通過。
 
 已 ship commits：
 
@@ -50,10 +50,25 @@ v0.3 原 backlog 中尚未 ship 的項目降權到 v0.4：
 2. Multi-vault 切換。
 3. Case export/import zip。
 
-## 未驗證 / 待用戶手動
+## Bridge fork 整合（2026-05-05 收尾）
 
-- open-design fork 內 `design-memory-bridge` skill 尚未手動建立。需按 `docs/superpowers/specs/2026-05-05-design-lab-v0.3-auto-auth.md` §4.1 template 寫入 fork。
-- 真實 bridge smoke 尚未做：`/design` auto-spawn 後，open-design fork bridge 讀 `$HOME/.claude/state/design-lab/api-token` 並帶 `X-Design-Lab-Token` 呼叫 `/api/context`。
+- open-design fork commit `101f2d3` (`feat(skills): add design-memory-bridge for design-lab sidecar`)：
+  - `skills/design-memory-bridge/SKILL.md`（98 行，agent manifest，純 Claude Code base format，無 fork `od:` 擴展）
+  - `skills/design-memory-bridge/lib/design-lab-context.ts`（74 行，TypeScript helper，verbatim from spec §3.4）
+- 兩檔皆 verbatim from spec，Gemini review PASS（無 P0/P1）。
+- 6/6 smoke 通過（從 fork cwd 跑 helper）：
+  1. happy `/api/context` → 完整 payload (`client, styleGuide, scenarioOverride, cases, antiCases, neverRules, retrievedFrom`)
+  2. unknown client → 仍回 payload（sidecar 預設行為）
+  3. `buildGenerationPrompt` 注入 context（length 1027）
+  4. corrupt token → 200（spec §3.2 GET 不驗 token，行為符合）
+  5. token file missing → null fail-soft
+  6. `DESIGN_LAB_SIDECAR_URL=http://127.0.0.1:1` → null fail-soft
+- 直接 curl 對照 spec §3.2：GET 三種 token (none/bad/ok) 全 200；POST no/bad token 401；evil Host 403。
+
+## 已知非 bug（不需修）
+
+- spec §3.4 (.ts) 用 `token.length > 0 ? token : null`、§4.1 (SKILL.md template) 用 `token || null`，兩處本身就有差異，verbatim 保留。
+- bridge skill 在 fork mode picker 會被 daemon `od.mode` zero-config fallback 為 "prototype"，但因無 `preview.entry`，picker 行為待 fork daemon 實測。本 v0.3 不處理（不是 user-facing artifact skill）。
 
 ## Active spec / plan
 
@@ -62,12 +77,10 @@ v0.3 原 backlog 中尚未 ship 的項目降權到 v0.4：
 
 ## Next session
 
-1. 確認 P4 commit 已在 main。
-2. Avy 手動 tag：
+v0.3 真 GA 已封板（design-lab + open-design bridge 都 ship）。下一動作：
 
-```bash
-git tag v0.3.0
-git push origin v0.3.0
-```
+1. 開 v0.4：建議先做 Global Search FTS5 或 Feedback log UI。
+2. Cloud sidecar prototype（v0.4 roadmap #1，SaaS path 起點）— 需獨立 spec。
+3. Auto-distill / LLM NEVER detector、URL screenshot 收 case 維持次順位。
 
-3. 若開始 v0.4，建議先做 Global Search FTS5 或 Feedback log UI；Auto-distill / LLM NEVER detector、URL screenshot 收 case 維持次順位。
+design-lab repo 無 remote `origin`，純本地。`v0.3.0` tag 已存在於本地。如要備份建議 push 到私 GitHub。
