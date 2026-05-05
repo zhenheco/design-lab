@@ -42,6 +42,12 @@ test('authHeaders throws a clear error when DESIGN_LAB_API_TOKEN is missing', as
     });
 });
 
+test('authHeaders throws when DESIGN_LAB_API_TOKEN is empty string', async () => {
+    await withApiToken('', () => {
+        assert.throws(() => authHeaders(), /DESIGN_LAB_API_TOKEN must be set/);
+    });
+});
+
 test('authHeaders supports Host override without changing token', async () => {
     await withApiToken('override-token', () => {
         assert.deepEqual(authHeaders({ host: 'localhost:4322' }), {

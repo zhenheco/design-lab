@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type ErrorRequestHandler, type Express, type RequestHandler } from 'express';
+import { requireHostAllowlist, requireTokenForWrites } from './middleware/auth.ts';
 import { casesRouter } from './routes/cases.ts';
 import { clientsRouter } from './routes/clients.ts';
 import { contextRouter } from './routes/context.ts';
@@ -44,9 +45,18 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
 };
 
 export function createApp(): Express {
+    if (!process.env.DESIGN_LAB_API_TOKEN) {
+        throw new Error('DESIGN_LAB_API_TOKEN must be set before createApp()');
+    }
+
     const app = express();
     app.use(express.json({ limit: '1mb' }));
+    app.get('/api/health', (_req, res) => {
+        res.json({ status: 'ok' });
+    });
     app.use(healthLogMiddleware);
+    app.use('/api', requireHostAllowlist);
+    app.use('/api', requireTokenForWrites);
     app.use('/api/clients', clientsRouter());
     app.use('/api/cases', casesRouter());
     app.use('/api/style-guide', styleGuideRouter());

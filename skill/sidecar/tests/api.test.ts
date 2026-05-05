@@ -191,7 +191,7 @@ function summarizeResponseClients(body: { cases: Array<{ client: string }>; anti
 test('GET /api/clients empty -> 200 { clients: [] }', async () => {
     const vault = setupVault();
 
-    const response = await withVaultEnv(vault, () => createAgent().get('/api/clients'));
+    const response = await withVaultEnv(vault, () => createAgent().get('/api/clients').set(authHeaders()));
 
     assert.equal(response.status, 200);
     assert.deepEqual(response.body, { clients: [] });
@@ -275,7 +275,7 @@ test('DELETE /api/clients/:slug -> 200 + archivePath', async () => {
 test('GET /api/cases empty -> 200 { cases: [] }', async () => {
     const vault = setupVault();
 
-    const response = await withVaultEnv(vault, () => createAgent().get('/api/cases'));
+    const response = await withVaultEnv(vault, () => createAgent().get('/api/cases').set(authHeaders()));
 
     assert.equal(response.status, 200);
     assert.deepEqual(response.body, { cases: [] });
@@ -330,7 +330,7 @@ test('GET /api/style-guide existing -> 200 + content + contentHash', async () =>
     const vault = setupVault();
     writeFileSync(join(vault, 'personal-style-guide.md'), '# Voice\n\nKeep it sharp.\n');
 
-    const response = await withVaultEnv(vault, () => createAgent().get('/api/style-guide'));
+    const response = await withVaultEnv(vault, () => createAgent().get('/api/style-guide').set(authHeaders()));
 
     assert.equal(response.status, 200);
     assert.equal(response.body.content, '# Voice\n\nKeep it sharp.\n');
@@ -341,7 +341,7 @@ test('POST /api/style-guide write -> 200 + new hash', async () => {
     const vault = setupVault();
     writeFileSync(join(vault, 'personal-style-guide.md'), 'old content');
 
-    const initial = await withVaultEnv(vault, () => createAgent().get('/api/style-guide'));
+    const initial = await withVaultEnv(vault, () => createAgent().get('/api/style-guide').set(authHeaders()));
     const response = await withVaultEnv(vault, () =>
         createAgent().post('/api/style-guide').set(authHeaders()).send({
             content: 'new content',
@@ -376,7 +376,7 @@ test('GET /api/scenario-overrides -> 200 + array', async () => {
     mkdirSync(overridesDir, { recursive: true });
     writeFileSync(join(overridesDir, 'landing.md'), 'Landing override');
 
-    const response = await withVaultEnv(vault, () => createAgent().get('/api/scenario-overrides'));
+    const response = await withVaultEnv(vault, () => createAgent().get('/api/scenario-overrides').set(authHeaders()));
 
     assert.equal(response.status, 200);
     assert.equal(response.body.overrides.length, 1);
@@ -403,7 +403,7 @@ test('GET /api/context without query -> 200 + full union payload', async () => {
     const vault = setupVault();
     seedContextBaseFixture(vault);
 
-    const response = await withVaultEnv(vault, () => createAgent().get('/api/context'));
+    const response = await withVaultEnv(vault, () => createAgent().get('/api/context').set(authHeaders()));
 
     assert.equal(response.status, 200);
     assert.deepEqual(Object.keys(response.body).sort(), [
@@ -425,7 +425,9 @@ test('GET /api/context?client=aicycle -> target client meta + self union scope',
     const vault = setupVault();
     seedContextBaseFixture(vault);
 
-    const response = await withVaultEnv(vault, () => createAgent().get('/api/context').query({ client: 'aicycle' }));
+    const response = await withVaultEnv(vault, () =>
+        createAgent().get('/api/context').set(authHeaders()).query({ client: 'aicycle' })
+    );
 
     assert.equal(response.status, 200);
     assert.equal(response.body.client.slug, 'aicycle');
@@ -437,7 +439,9 @@ test('GET /api/context?client=_personal -> self clients only', async () => {
     const vault = setupVault();
     seedContextBaseFixture(vault);
 
-    const response = await withVaultEnv(vault, () => createAgent().get('/api/context').query({ client: '_personal' }));
+    const response = await withVaultEnv(vault, () =>
+        createAgent().get('/api/context').set(authHeaders()).query({ client: '_personal' })
+    );
 
     assert.equal(response.status, 200);
     assert.equal(response.body.client.slug, '_personal');
@@ -449,7 +453,9 @@ test('GET /api/context?client=ghost -> unknown client returns null + self union 
     const vault = setupVault();
     seedContextBaseFixture(vault);
 
-    const response = await withVaultEnv(vault, () => createAgent().get('/api/context').query({ client: 'ghost' }));
+    const response = await withVaultEnv(vault, () =>
+        createAgent().get('/api/context').set(authHeaders()).query({ client: 'ghost' })
+    );
 
     assert.equal(response.status, 200);
     assert.equal(response.body.client, null);
@@ -462,7 +468,7 @@ test('GET /api/context client+scenario -> scenario filter + override + never rul
     seedContextBaseFixture(vault);
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().get('/api/context').query({ client: 'aicycle', scenario: 'landing' })
+        createAgent().get('/api/context').set(authHeaders()).query({ client: 'aicycle', scenario: 'landing' })
     );
 
     assert.equal(response.status, 200);
@@ -487,7 +493,7 @@ test('GET /api/context positive cases are limited to top 5', async () => {
     seedContextLimitFixture(vault);
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().get('/api/context').query({ client: '_personal', scenario: 'landing' })
+        createAgent().get('/api/context').set(authHeaders()).query({ client: '_personal', scenario: 'landing' })
     );
 
     assert.equal(response.status, 200);
@@ -500,7 +506,7 @@ test('GET /api/context antiCases are not limited and missing override falls back
     seedContextLimitFixture(vault);
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().get('/api/context').query({ client: '_personal', scenario: 'nonexistent' })
+        createAgent().get('/api/context').set(authHeaders()).query({ client: '_personal', scenario: 'nonexistent' })
     );
 
     assert.equal(response.status, 200);
@@ -514,7 +520,7 @@ test('GET /api/context antiCases return all negatives in scope', async () => {
     seedContextLimitFixture(vault);
 
     const response = await withVaultEnv(vault, () =>
-        createAgent().get('/api/context').query({ client: '_personal', scenario: 'landing' })
+        createAgent().get('/api/context').set(authHeaders()).query({ client: '_personal', scenario: 'landing' })
     );
 
     assert.equal(response.status, 200);
