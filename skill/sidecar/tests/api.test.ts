@@ -566,6 +566,46 @@ test('GET /api/context?client=whatcanido -> merges global and per-brand NEVER ru
     );
 });
 
+test('GET /api/context?client=whatcanido -> returns brand-only NEVER rules when global guide has none', async () => {
+    const vault = setupVault();
+    seedContextBaseFixture(vault);
+    writeClientMeta(vault, 'whatcanido', { type: 'client' });
+    writeStyleGuide(vault, '# Personal Style Guide\n\nGlobal baseline without rules.\n');
+    writeClientStyleGuide(
+        vault,
+        'whatcanido',
+        [
+            '# WhatCanIDo Style Guide',
+            '',
+            '## NEVER',
+            '- id: brand-only',
+            '  rule: "Brand-only rule"',
+            '  detector:',
+            '    type: regex',
+            "    pattern: 'brand-only-pattern'",
+            '    target: css',
+            ''
+        ].join('\n')
+    );
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().get('/api/context').set(authHeaders()).query({ client: 'whatcanido' })
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body.neverRules, [
+        {
+            id: 'brand-only',
+            rule: 'Brand-only rule',
+            detector: {
+                type: 'regex',
+                pattern: 'brand-only-pattern',
+                target: 'css'
+            }
+        }
+    ]);
+});
+
 test('GET /api/context per-brand style guide stays scoped to the requested client', async () => {
     const vault = setupVault();
     seedContextBaseFixture(vault);
