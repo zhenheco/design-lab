@@ -4,7 +4,7 @@ import { mkdtemp, stat } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { captureUrl } from '../lib/capture/url-capture.ts';
+import { captureUrl, isPrivateOrLoopbackHost } from '../lib/capture/url-capture.ts';
 
 async function serveHtml(html: string): Promise<{ url: string; close: () => Promise<void> }> {
     const server = createServer((_req, res) => {
@@ -89,5 +89,15 @@ test('captureUrl screenshots a local HTML fixture and extracts computed design t
         assert.ok(result.tokens.fonts && 'heading' in result.tokens.fonts);
     } finally {
         await fixture.close();
+    }
+});
+
+test('isPrivateOrLoopbackHost identifies localhost and private address literals', () => {
+    for (const host of ['localhost', '127.0.0.1', '10.1.2.3', '192.168.1.1', '172.16.0.1', '169.254.1.1', '::1']) {
+        assert.equal(isPrivateOrLoopbackHost(host), true, `${host} should be private or loopback`);
+    }
+
+    for (const host of ['example.com', '8.8.8.8', '172.32.0.1']) {
+        assert.equal(isPrivateOrLoopbackHost(host), false, `${host} should be public`);
     }
 });

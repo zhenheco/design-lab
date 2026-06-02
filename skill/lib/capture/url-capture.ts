@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
+import { isIP } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { chromium, type Browser } from 'playwright';
@@ -18,6 +19,72 @@ export class CaptureUrlError extends Error {
         super(message);
         this.name = 'CaptureUrlError';
     }
+}
+
+function parseIpv4Octets(hostname: string): number[] | null {
+    const parts = hostname.split('.');
+    if (parts.length !== 4) {
+        return null;
+    }
+
+    const octets = parts.map((part) => {
+        if (!/^\d+$/.test(part)) {
+            return Number.NaN;
+        }
+        return Number(part);
+    });
+
+    if (octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
+        return null;
+    }
+
+    return octets;
+}
+
+function firstIpv6Hextet(hostname: string): number | null {
+    const [first] = hostname.split(':', 1);
+    if (!first) {
+        return null;
+    }
+
+    const parsed = Number.parseInt(first, 16);
+    return Number.isNaN(parsed) ? null : parsed;
+}
+
+export function isPrivateOrLoopbackHost(hostname: string): boolean {
+    const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+
+    if (normalized === 'localhost' || normalized.endsWith('.localhost')) {
+        return true;
+    }
+
+    if (isIP(normalized) === 4) {
+        const octets = parseIpv4Octets(normalized);
+        if (!octets) {
+            return false;
+        }
+
+        const [first, second] = octets;
+        return (
+            first === 0 ||
+            first === 10 ||
+            first === 127 ||
+            (first === 169 && second === 254) ||
+            (first === 172 && second >= 16 && second <= 31) ||
+            (first === 192 && second === 168)
+        );
+    }
+
+    if (isIP(normalized) === 6) {
+        if (normalized === '::' || normalized === '::1') {
+            return true;
+        }
+
+        const first = firstIpv6Hextet(normalized);
+        return first !== null && ((first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80);
+    }
+
+    return false;
 }
 
 function parseHttpUrl(url: string): URL {
