@@ -2,7 +2,7 @@
 
 **Date**: 2026-05-02
 **Status**: Design (active — supersedes `2026-05-02-design-lab-v0.2-design.md`)
-**Owner**: Avy (nelsonjou1101@gmail.com)
+**Owner**: Avy
 **Predecessors**:
 - v0.1：`docs/superpowers/specs/2026-05-02-design-lab-design.md`
 - v0.2 attempt 1（dashboard from-scratch，已 SUPERSEDED）：`2026-05-02-design-lab-v0.2-design.md`

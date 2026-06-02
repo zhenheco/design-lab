@@ -2,7 +2,7 @@
 
 **Date**: 2026-05-02
 **Status**: 🛑 **SUPERSEDED** (2026-05-02 same day) — pivoted to fork `nexu-io/open-design` + extend with `design-memory` skill。Phase E-G dashboard ~80% 重複造輪子。詳見 commit 訊息與 `.remember/remember.md`。Phase A 部分（lib/paths.ts、schema_v2 機制、case-loader/writer .ts）保留為 standalone lib，未來打包進 fork 的 design-memory skill。
-**Owner**: Avy (nelsonjou1101@gmail.com)
+**Owner**: Avy
 **Predecessor**: v0.1 (`docs/superpowers/specs/2026-05-02-design-lab-design.md`)
 **Skill location**: `~/.claude/skills/design-lab/`（symlink → repo `skill/`）
 **Memory location**: `~/Documents/CC Cli/design-library/`（Obsidian vault）
@@ -84,7 +84,7 @@ Storage:
 
 ### 3.2 目錄結構
 
-#### Skill repo（`/Volumes/500G/Claude Code Projects/Design skill/`）
+#### Skill repo（`<repo-root>/`）
 
 ```
 skill/

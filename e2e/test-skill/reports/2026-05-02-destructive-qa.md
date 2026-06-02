@@ -1,7 +1,7 @@
 # /destructive-qa 報告 — design-lab (backend CLI adaptation)
 
 **日期**: 2026-05-02
-**Repo**: `/Volumes/500G/Claude Code Projects/Design skill`
+**Repo**: `<repo-root>`
 **HEAD**: `b3ef026` (Phase α complete + β1)
 **Skill adaptation**: 原 destructive-qa 是 web/API 取向（Chrome MCP + curl + 注入），design-lab 是 CLI skill → 改套 M1-M4 meta-pattern 到 backend：**vault input 不可信、path 注入、symlink 攻擊、race condition、partial fail consistency**
 

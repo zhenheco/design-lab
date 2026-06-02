@@ -96,7 +96,7 @@ prompt 檔還在：`/tmp/gemini-design-system-research.txt`（如果被清，從
 ## 檔案地圖
 
 ```
-/Volumes/500G/Claude Code Projects/Design skill/   ← 本 repo
+<repo-root>/   ← 本 repo
 ├── docs/superpowers/
 │   ├── HANDOFF.md                                  # 本檔
 │   ├── specs/2026-05-02-design-lab-design.md       # spec（12 節）
@@ -112,7 +112,7 @@ prompt 檔還在：`/tmp/gemini-design-system-research.txt`（如果被清，從
 ├── deploy.sh
 └── .git/
 
-~/.claude/skills/design-lab → /Volumes/500G/.../skill   # symlink
+~/.claude/skills/design-lab → <repo-root>/skill   # symlink
 ~/Documents/CC Cli/design-library/                       # vault（待 init）
 ~/.claude/skills/auto-skill/
 ├── knowledge-base/nodejs-esm-testing-quirks.md         # 新增

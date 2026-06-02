@@ -92,7 +92,7 @@ All four adapters converge on one pipeline: **acquire image → vision extracts 
 - **whatcanido distillation quality:** turning a 19 KB freeform doc into structured DO/NEVER + Cases is a judgement task — review the distilled Style Guide before relying on it.
 - **Token reach from MCP server:** the MCP server must read `~/.claude/state/design-lab/api-token` **per request** (not cache at startup) and forward `X-Design-Lab-Token`; respect the 401-reload-once contract. Mitigated further by the launchd sidecar (token stops rotating per-call).
 
-## Cross-validation (2026-06-02, Gemini, acejou27)
+## Cross-validation (2026-06-02, Gemini, <reviewer-account>)
 
 Adversarial review raised 4 🔴 + 2 🟡 — all spec/ADR-level (nothing built yet); core decisions unchanged. Resolutions folded in above:
 - 🔴 vision responsibility unstated → **conversing agent extracts tokens**, sidecar/MCP only persist (§Capture).

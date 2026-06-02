@@ -120,7 +120,7 @@ skill/
         ├── reindex.test.ts
         └── watcher.test.ts
 
-/Volumes/500G/Claude Code Projects/open-design/
+<open-design-repo>/
 └── skills/
     └── design-memory-bridge/
         └── SKILL.md
@@ -820,7 +820,7 @@ type StyleGuideDoc = { markdown: string; hash: string };
 
 ### Task ε1: open-design fork 內寫 design-memory-bridge skill
 
-**Files:** Create or modify `/Volumes/500G/Claude Code Projects/open-design/skills/design-memory-bridge/SKILL.md`
+**Files:** Create or modify `<open-design-repo>/skills/design-memory-bridge/SKILL.md`
 
 - [ ] **Step 1 — tests/verification plan first:** 先定義手動驗證點：skill pre-flight 會 `curl` sidecar `/api/context`，sidecar down 時 fallback，不影響 Open Design 既有流程。
 - [ ] **Step 2 — confirm current gap:** open-design fork 內尚無此 skill。

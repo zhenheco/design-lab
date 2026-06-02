@@ -2,7 +2,7 @@
 
 **Date**: 2026-05-02
 **Status**: Design (pending review → writing-plans)
-**Owner**: Avy (nelsonjou1101@gmail.com)
+**Owner**: Avy
 **Skill location (target)**: `~/.claude/skills/design-lab/`
 **Memory location (target)**: `~/Documents/CC Cli/design-library/` (Obsidian vault)
 

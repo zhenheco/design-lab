@@ -5,7 +5,7 @@
 **Goal:** 建立 `design-lab` Claude Code skill 的 v0.1 MVP — 4 個 slash command 有最小可用功能 + 1 個 stub、memory 目錄結構（Obsidian vault 內）、schema migration framework 起手式、NEVER lint regex engine。Spec: `docs/superpowers/specs/2026-05-02-design-lab-design.md`
 
 **Architecture:**
-- **Skill 程式碼** 開發於 `/Volumes/500G/Claude Code Projects/Design skill/skill/`，最終 symlink 部署到 `~/.claude/skills/design-lab/`。SKILL.md (frontmatter + slash command 路由) + bash scripts (user 互動 / wrapper) + node helpers (邏輯)。
+- **Skill 程式碼** 開發於 `<repo-root>/skill/`，最終 symlink 部署到 `~/.claude/skills/design-lab/`。SKILL.md (frontmatter + slash command 路由) + bash scripts (user 互動 / wrapper) + node helpers (邏輯)。
 - **Memory** 在 `~/Documents/CC Cli/design-library/`（Obsidian vault 內），純 markdown source of truth。v0.1 不上 SQLite（v0.2 才加索引快取，v0.1 < 50 case 純 grep + LLM 即可）。
 - **無 build step**：純 ESM JS（不上 TypeScript）、bash scripts。
 - **Schema migration framework 起手式**：`lib/schema.js` 含 `CURRENT_SCHEMA_VERSION = 1`，`migrations/` 目錄存在但空，啟動腳本跑 schema check（v1 無 diff 直接過）。
@@ -28,22 +28,22 @@
 ## Task 1: 專案初始化 + git + 目錄結構 + deploy 腳本
 
 **Files:**
-- Create: `/Volumes/500G/Claude Code Projects/Design skill/.gitignore`
-- Create: `/Volumes/500G/Claude Code Projects/Design skill/skill/SKILL.md` (placeholder)
-- Create: `/Volumes/500G/Claude Code Projects/Design skill/package.json`
-- Create: `/Volumes/500G/Claude Code Projects/Design skill/deploy.sh`
-- Create: `/Volumes/500G/Claude Code Projects/Design skill/skill/scripts/.keep`
-- Create: `/Volumes/500G/Claude Code Projects/Design skill/skill/lib/.keep`
-- Create: `/Volumes/500G/Claude Code Projects/Design skill/skill/templates/.keep`
-- Create: `/Volumes/500G/Claude Code Projects/Design skill/skill/migrations/README.md`
-- Create: `/Volumes/500G/Claude Code Projects/Design skill/skill/tests/.keep`
+- Create: `<repo-root>/.gitignore`
+- Create: `<repo-root>/skill/SKILL.md` (placeholder)
+- Create: `<repo-root>/package.json`
+- Create: `<repo-root>/deploy.sh`
+- Create: `<repo-root>/skill/scripts/.keep`
+- Create: `<repo-root>/skill/lib/.keep`
+- Create: `<repo-root>/skill/templates/.keep`
+- Create: `<repo-root>/skill/migrations/README.md`
+- Create: `<repo-root>/skill/tests/.keep`
 
 - [ ] **Step 1.1: cd to project root + git init**
 
 ```bash
-cd "/Volumes/500G/Claude Code Projects/Design skill"
+cd "<repo-root>"
 git init
-git config user.email "ace@zhenhe-co.com"
+git config user.email "<git-email>"
 git config user.name "zhenheco"
 ```
 
@@ -220,7 +220,7 @@ EOF
 
 - [ ] **Step 2.2: Run test → expect FAIL（檔案不存在）**
 
-Run: `cd "/Volumes/500G/Claude Code Projects/Design skill" && node --test skill/tests/schema.test.js`
+Run: `cd "<repo-root>" && node --test skill/tests/schema.test.js`
 Expected: 全部 FAIL（`check-schema.sh` 不存在）
 
 - [ ] **Step 2.3: 寫 lib/schema.js**
@@ -1604,7 +1604,7 @@ bash deploy.sh
 
 Expected output:
 ```
-Deployed: /Users/avyhsu/.claude/skills/design-lab -> /Volumes/500G/Claude Code Projects/Design skill/skill
+Deployed: ~/.claude/skills/design-lab -> <repo-root>/skill
 ```
 
 驗證：

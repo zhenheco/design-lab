@@ -2,7 +2,7 @@
 
 **Date**: 2026-05-05
 **Status**: Design (active — Claude↔Gemini cross-review consensus，user 拍板 go)
-**Owner**: Avy (nelsonjou1101@gmail.com)
+**Owner**: Avy
 **Predecessor**: `2026-05-02-design-lab-v0.2-sidecar.md`（v0.2.1 GA shipped）
 
 ## 1. Why

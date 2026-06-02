@@ -24,7 +24,7 @@ test('MCP add_case mapper posts the full case body with sourceImagePath as a pat
         sentiment: 'positive',
         scenario: 'landing',
         quote: '留白乾淨，重點明確',
-        sourceImagePath: '/Users/avyhsu/Desktop/reference.png',
+        sourceImagePath: '~/Desktop/reference.png',
         tokens: { palette: ['ink', 'rice-paper'] },
         aspects
     });
@@ -39,7 +39,7 @@ test('MCP add_case mapper posts the full case body with sourceImagePath as a pat
             sentiment: 'positive',
             scenario: 'landing',
             quote: '留白乾淨，重點明確',
-            sourceImagePath: '/Users/avyhsu/Desktop/reference.png',
+            sourceImagePath: '~/Desktop/reference.png',
             tokens: { palette: ['ink', 'rice-paper'] },
             aspects
         }
