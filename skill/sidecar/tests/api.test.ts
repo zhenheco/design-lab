@@ -513,6 +513,22 @@ test('POST /api/clients/:slug/style-guide missing client -> 404 and invalid slug
     assert.equal(existsSync(join(vault, 'clients', '..', 'x', 'style-guide.md')), false);
 });
 
+test('POST /api/clients/:slug/style-guide without token -> 401', async () => {
+    const vault = setupVault();
+    writeClientMeta(vault, 'whatcanido', { type: 'client' });
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent()
+            .post('/api/clients/whatcanido/style-guide')
+            .set('Host', '127.0.0.1:5174')
+            .send({
+                content: 'new brand guide'
+            })
+    );
+
+    assert.equal(response.status, 401);
+});
+
 test('GET /api/scenario-overrides -> 200 + array', async () => {
     const vault = setupVault();
     const overridesDir = join(vault, 'scenario-overrides');
