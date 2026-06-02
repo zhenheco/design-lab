@@ -84,9 +84,10 @@ test('captureUrl screenshots a local HTML fixture and extracts computed design t
 
         assert.ok(Array.isArray(result.tokens.palette));
         assert.ok(result.tokens.palette.length > 0);
-        assert.equal(typeof result.tokens.fonts, 'object');
-        assert.ok(result.tokens.fonts && 'body' in result.tokens.fonts);
-        assert.ok(result.tokens.fonts && 'heading' in result.tokens.fonts);
+        const fonts = result.tokens.fonts;
+        assert.ok(fonts && typeof fonts === 'object' && !Array.isArray(fonts));
+        assert.ok('body' in fonts);
+        assert.ok('heading' in fonts);
     } finally {
         await fixture.close();
     }

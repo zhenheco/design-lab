@@ -892,7 +892,8 @@ test('GET /api/context returns aspects on every case summary', async () => {
     );
 
     assert.equal(response.status, 200);
-    const bySlug = new Map(response.body.cases.map((entry: { slug: string }) => [entry.slug, entry]));
+    const cases = response.body.cases as Array<{ slug: string; aspects: typeof aspects }>;
+    const bySlug = new Map(cases.map((entry) => [entry.slug, entry]));
     assert.deepEqual(bySlug.get('aspectual')?.aspects, aspects);
     assert.deepEqual(bySlug.get('legacy')?.aspects, []);
 });
