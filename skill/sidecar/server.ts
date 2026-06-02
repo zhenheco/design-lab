@@ -7,6 +7,7 @@ import { requireHostAllowlist, requireTokenForWrites } from './middleware/auth.t
 import { casesRouter } from './routes/cases.ts';
 import { clientsRouter } from './routes/clients.ts';
 import { contextRouter } from './routes/context.ts';
+import { captureRouter } from './routes/capture.ts';
 import { feedbackRouter } from './routes/feedback.ts';
 import { scenarioOverridesRouter } from './routes/scenario-overrides.ts';
 import { clientStyleGuideRouter, styleGuideRouter } from './routes/style-guide.ts';
@@ -60,6 +61,7 @@ export function createApp(): Express {
     app.use('/api', requireTokenForWrites);
     app.use('/api/clients/:slug/style-guide', clientStyleGuideRouter());
     app.use('/api/clients', clientsRouter());
+    app.use('/api/capture', captureRouter());
     app.use('/api/cases', casesRouter());
     app.use('/api/feedback', feedbackRouter());
     app.use('/api/style-guide', styleGuideRouter());
