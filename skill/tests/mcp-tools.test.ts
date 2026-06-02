@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAddCaseRequest, buildEditStyleGuideRequest } from '../mcp/tools.ts';
+import { buildAddCaseRequest, buildCaptureUrlRequest, buildEditStyleGuideRequest } from '../mcp/tools.ts';
 
 test('MCP add_case mapper posts the full case body with sourceImagePath as a path string', () => {
     const request = buildAddCaseRequest({
@@ -57,6 +57,30 @@ test('MCP edit_style_guide mapper targets global style guide when brand is omitt
         body: {
             content: '# Personal Style Guide',
             expectedHash: 'global-hash-before-edit'
+        }
+    });
+});
+
+test('MCP capture_url mapper posts URL capture requests to the sidecar', () => {
+    const request = buildCaptureUrlRequest({
+        url: 'https://example.com',
+        client: 'whatcanido',
+        scenario: 'landing',
+        quote: 'Hero typography is focused and calm.',
+        sentiment: 'positive',
+        slug: 'example-home'
+    });
+
+    assert.deepEqual(request, {
+        method: 'POST',
+        path: '/api/capture/url',
+        body: {
+            url: 'https://example.com',
+            client: 'whatcanido',
+            scenario: 'landing',
+            quote: 'Hero typography is focused and calm.',
+            sentiment: 'positive',
+            slug: 'example-home'
         }
     });
 });

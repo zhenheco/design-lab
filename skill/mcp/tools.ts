@@ -19,6 +19,17 @@ export const addCaseInputSchema = {
 
 export type AddCaseArgs = z.infer<z.ZodObject<typeof addCaseInputSchema>>;
 
+export const captureUrlInputSchema = {
+    url: z.string(),
+    client: z.string(),
+    scenario: z.enum(['landing', 'saas-ui', 'brand', 'content']),
+    quote: z.string(),
+    sentiment: z.enum(['positive', 'negative']).optional(),
+    slug: z.string().optional()
+};
+
+export type CaptureUrlArgs = z.infer<z.ZodObject<typeof captureUrlInputSchema>>;
+
 export const listClientsInputSchema = {};
 
 export const getContextInputSchema = {
@@ -60,6 +71,14 @@ export function buildAddCaseRequest(args: AddCaseArgs): SidecarRequest {
             sourceImagePath: args.sourceImagePath,
             tokens: args.tokens
         }
+    };
+}
+
+export function buildCaptureUrlRequest(args: CaptureUrlArgs): SidecarRequest {
+    return {
+        method: 'POST',
+        path: '/api/capture/url',
+        body: args
     };
 }
 
