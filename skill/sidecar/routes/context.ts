@@ -40,7 +40,16 @@ export function contextRouter(): Router {
         const allCases = loadCaseSummaries(getVaultPath(), { client: clientSlug, scenario });
         const cases = allCases.filter((entry) => entry.sentiment === 'positive').slice(0, TOP_N_POSITIVE);
         const antiCases = allCases.filter((entry) => entry.sentiment === 'negative');
-        const neverRules = parseRulesFromGuide(styleGuide);
+        const neverRulesById = new Map<string, NeverRule>();
+        for (const rule of parseRulesFromGuide(styleGuide)) {
+            neverRulesById.set(rule.id, rule);
+        }
+        for (const rule of parseRulesFromGuide(brandStyleGuide)) {
+            if (!neverRulesById.has(rule.id)) {
+                neverRulesById.set(rule.id, rule);
+            }
+        }
+        const neverRules = Array.from(neverRulesById.values());
         const retrievedFrom = Array.from(new Set(allCases.map((entry) => entry.client))).sort();
 
         res.json({

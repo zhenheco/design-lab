@@ -487,6 +487,77 @@ test('GET /api/context?client=whatcanido -> includes per-brand brandStyleGuide a
     assert.equal(response.body.brandStyleGuide, brandStyleGuide);
 });
 
+test('GET /api/context?client=whatcanido -> merges global and per-brand NEVER rules with global priority', async () => {
+    const vault = setupVault();
+    seedContextBaseFixture(vault);
+    writeClientMeta(vault, 'whatcanido', { type: 'client' });
+    writeStyleGuide(
+        vault,
+        [
+            '# Personal Style Guide',
+            '',
+            '## NEVER',
+            '- id: global-a',
+            '  rule: "Global rule A"',
+            '  detector:',
+            '    type: regex',
+            "    pattern: 'global-a-pattern'",
+            '    target: css',
+            '- id: shared-id',
+            '  rule: "Global shared rule"',
+            '  detector:',
+            '    type: regex',
+            "    pattern: 'global-shared-pattern'",
+            '    target: css',
+            ''
+        ].join('\n')
+    );
+    writeClientStyleGuide(
+        vault,
+        'whatcanido',
+        [
+            '# WhatCanIDo Style Guide',
+            '',
+            '## NEVER',
+            '- id: brand-b',
+            '  rule: "Brand rule B"',
+            '  detector:',
+            '    type: regex',
+            "    pattern: 'brand-b-pattern'",
+            '    target: css',
+            '- id: shared-id',
+            '  rule: "Brand shared rule should not override"',
+            '  detector:',
+            '    type: regex',
+            "    pattern: 'brand-shared-pattern'",
+            '    target: css',
+            ''
+        ].join('\n')
+    );
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().get('/api/context').set(authHeaders()).query({ client: 'whatcanido' })
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(
+        response.body.neverRules.map((rule: { id: string }) => rule.id).sort(),
+        ['brand-b', 'global-a', 'shared-id']
+    );
+    assert.deepEqual(
+        response.body.neverRules.find((rule: { id: string }) => rule.id === 'shared-id'),
+        {
+            id: 'shared-id',
+            rule: 'Global shared rule',
+            detector: {
+                type: 'regex',
+                pattern: 'global-shared-pattern',
+                target: 'css'
+            }
+        }
+    );
+});
+
 test('GET /api/context client+scenario -> scenario filter + override + never rules', async () => {
     const vault = setupVault();
     seedContextBaseFixture(vault);
