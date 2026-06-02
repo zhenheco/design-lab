@@ -1,5 +1,5 @@
 import { Router, type Request } from 'express';
-import { loadCaseSummaries, type CaseSummary } from '../../lib/case-loader.ts';
+import { loadCaseSummaries, type Aspect, type CaseSummary } from '../../lib/case-loader.ts';
 import { getVaultPath } from '../../lib/paths.ts';
 import { writeCase, type WriteCaseInput } from '../../lib/case-writer.ts';
 import { isAllowedSourceImagePath } from './source-image-allowlist.ts';
@@ -21,6 +21,19 @@ function parseCasesQuery(req: Request<Record<string, string>, unknown, unknown, 
     }
 
     return { client, scenario, sentiment };
+}
+
+function isAspectArray(value: unknown): value is Aspect[] {
+    return (
+        Array.isArray(value) &&
+        value.every(
+            (item) =>
+                isRecord(item) &&
+                typeof item.dimension === 'string' &&
+                (item.verdict === 'like' || item.verdict === 'dislike') &&
+                typeof item.note === 'string'
+        )
+    );
 }
 
 function parseWriteCaseBody(req: Request<Record<string, string>, unknown, unknown>): WriteCaseInput | null {
@@ -50,6 +63,14 @@ function parseWriteCaseBody(req: Request<Record<string, string>, unknown, unknow
         tokens = req.body.tokens;
     }
 
+    let aspects: Aspect[] | undefined;
+    if ('aspects' in req.body) {
+        if (!isAspectArray(req.body.aspects)) {
+            return null;
+        }
+        aspects = req.body.aspects;
+    }
+
     return {
         client: req.body.client,
         slug: req.body.slug,
@@ -57,7 +78,8 @@ function parseWriteCaseBody(req: Request<Record<string, string>, unknown, unknow
         scenario: req.body.scenario,
         quote: req.body.quote,
         sourceImagePath: req.body.sourceImagePath,
-        tokens
+        tokens,
+        aspects
     };
 }
 

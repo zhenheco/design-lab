@@ -86,6 +86,10 @@ async function withEnv<T>(overrides: Record<string, string | undefined>, fn: () 
 
 test('POST /api/capture/url captures a fixture URL and writes a design case with snapshot tokens', { timeout: 30_000 }, async () => {
     const vault = setupVault();
+    const aspects = [
+        { dimension: 'typography', verdict: 'like' as const, note: 'x' },
+        { dimension: 'color', verdict: 'dislike' as const, note: '太冷' }
+    ];
     const fixture = await serveHtml(`<!doctype html>
         <html>
             <head>
@@ -128,7 +132,8 @@ test('POST /api/capture/url captures a fixture URL and writes a design case with
                     url: fixture.url,
                     client: 'whatcanido',
                     scenario: 'landing',
-                    quote: 'The landing page keeps the paper tone and typography consistent.'
+                    quote: 'The landing page keeps the paper tone and typography consistent.',
+                    aspects
                 })
         );
 
@@ -145,6 +150,7 @@ test('POST /api/capture/url captures a fixture URL and writes a design case with
         assert.deepEqual(caseFile.data.quotes_from_user, [
             'The landing page keeps the paper tone and typography consistent.'
         ]);
+        assert.deepEqual(caseFile.data.aspects, aspects);
         assert.ok(Array.isArray(caseFile.data.tokens.palette));
         assert.ok(caseFile.data.tokens.palette.length > 0);
     } finally {

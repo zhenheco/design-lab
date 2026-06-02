@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { CaptureUrlError, captureUrl } from '../../lib/capture/url-capture.ts';
 import { writeCase } from '../../lib/case-writer.ts';
 import { loadClient } from '../../lib/client-loader.ts';
+import type { Aspect } from '../../lib/case-loader.ts';
 import { getAntiCasePath, getCasePath } from '../../lib/paths.ts';
 import { isAllowedSourceImagePath } from './source-image-allowlist.ts';
 
@@ -11,6 +12,19 @@ type Sentiment = 'positive' | 'negative';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isAspectArray(value: unknown): value is Aspect[] {
+    return (
+        Array.isArray(value) &&
+        value.every(
+            (item) =>
+                isRecord(item) &&
+                typeof item.dimension === 'string' &&
+                (item.verdict === 'like' || item.verdict === 'dislike') &&
+                typeof item.note === 'string'
+        )
+    );
 }
 
 function slugify(value: string): string {
@@ -93,6 +107,15 @@ export function captureRouter(): Router {
             return;
         }
 
+        let aspects: Aspect[] | undefined;
+        if ('aspects' in req.body) {
+            if (!isAspectArray(req.body.aspects)) {
+                res.status(400).json({ error: 'invalid aspects' });
+                return;
+            }
+            aspects = req.body.aspects;
+        }
+
         if (!loadClient(client)) {
             res.status(404).json({ error: `client not registered: ${client}` });
             return;
@@ -115,7 +138,8 @@ export function captureRouter(): Router {
                 scenario: scenario as Scenario,
                 quote,
                 sourceImagePath: capture.imagePath,
-                tokens: capture.tokens
+                tokens: capture.tokens,
+                aspects
             });
 
             res.status(201).json({

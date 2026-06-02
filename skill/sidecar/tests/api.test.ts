@@ -5,6 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import express from 'express';
+import matter from 'gray-matter';
 import request from 'supertest';
 import { createApp, errorHandler } from '../server.ts';
 import { authHeaders } from './helpers/auth-headers.ts';
@@ -309,6 +310,10 @@ test('POST /api/cases valid -> 201', async () => {
     writeClientMeta(vault, 'acme');
     const fixture = join(vault, 'fixture.png');
     writeFileSync(fixture, 'png');
+    const aspects = [
+        { dimension: 'typography', verdict: 'like' as const, note: 'x' },
+        { dimension: 'color', verdict: 'dislike' as const, note: '太冷' }
+    ];
 
     const response = await withVaultEnv(vault, () =>
         createAgent().post('/api/cases').set(authHeaders()).send({
@@ -318,7 +323,8 @@ test('POST /api/cases valid -> 201', async () => {
             scenario: 'landing',
             quote: 'Strong hero section',
             sourceImagePath: fixture,
-            tokens: { palette: 'warm' }
+            tokens: { palette: 'warm' },
+            aspects
         })
     );
 
@@ -326,6 +332,8 @@ test('POST /api/cases valid -> 201', async () => {
     assert.equal(response.body.casePath, join(vault, 'clients', 'acme', 'cases', '0001.md'));
     assert.equal(response.body.assetsDir, join(vault, 'clients', 'acme', 'cases', '0001'));
     assert.ok(existsSync(response.body.casePath));
+    const caseFile = matter(readFileSync(response.body.casePath, 'utf8'));
+    assert.deepEqual(caseFile.data.aspects, aspects);
 });
 
 test('POST /api/cases missing client -> 400', async () => {
@@ -347,6 +355,43 @@ test('POST /api/cases missing client -> 400', async () => {
 
     assert.equal(response.status, 400);
     assert.match(response.body.error, /client not registered/);
+});
+
+test('POST /api/cases invalid aspects -> 400', async () => {
+    const vault = setupVault();
+    writeClientMeta(vault, 'acme');
+    const fixture = join(vault, 'fixture.png');
+    writeFileSync(fixture, 'png');
+    const basePayload = {
+        client: 'acme',
+        slug: '0001',
+        sentiment: 'positive',
+        scenario: 'landing',
+        quote: 'Strong hero section',
+        sourceImagePath: fixture
+    };
+
+    const invalidVerdict = await withVaultEnv(vault, () =>
+        createAgent()
+            .post('/api/cases')
+            .set(authHeaders())
+            .send({
+                ...basePayload,
+                aspects: [{ dimension: 'typography', verdict: 'mixed', note: 'x' }]
+            })
+    );
+    const nonArray = await withVaultEnv(vault, () =>
+        createAgent()
+            .post('/api/cases')
+            .set(authHeaders())
+            .send({
+                ...basePayload,
+                aspects: { dimension: 'typography', verdict: 'like', note: 'x' }
+            })
+    );
+
+    assert.equal(invalidVerdict.status, 400);
+    assert.equal(nonArray.status, 400);
 });
 
 test('POST /api/feedback valid -> 201 + appends feedback log row', async () => {
