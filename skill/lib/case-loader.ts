@@ -2,12 +2,19 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import matter from 'gray-matter';
 
+export type Aspect = {
+    dimension: string;
+    verdict: 'like' | 'dislike';
+    note: string;
+};
+
 export interface CaseSummary {
     slug: string;
     client: string;
     scenario: string;
     sentiment: 'positive' | 'negative';
     quotes_from_user: string[];
+    aspects: Aspect[];
     tags: { style: string[]; mood: string[]; elements: string[]; industry: string[] };
     tokens: Record<string, unknown>;
     mdPath: string;
@@ -147,6 +154,21 @@ function normalizeTokens(value: unknown): Record<string, unknown> {
     return isRecord(value) ? value : {};
 }
 
+function normalizeAspects(value: unknown): Aspect[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value.filter((item): item is Aspect => {
+        return (
+            isRecord(item) &&
+            typeof item.dimension === 'string' &&
+            (item.verdict === 'like' || item.verdict === 'dislike') &&
+            typeof item.note === 'string'
+        );
+    });
+}
+
 function toOptionalString(value: unknown): string | undefined {
     if (typeof value === 'string') {
         return value;
@@ -168,6 +190,7 @@ function parseCaseSummary(mdPath: string, clientSlug: string, sentiment: 'positi
             scenario: toOptionalString(frontmatter.scenario) ?? '',
             sentiment,
             quotes_from_user: toStringArray(frontmatter.quotes_from_user),
+            aspects: normalizeAspects(frontmatter.aspects),
             tags: normalizeTags(frontmatter.tags),
             tokens: normalizeTokens(frontmatter.tokens),
             mdPath

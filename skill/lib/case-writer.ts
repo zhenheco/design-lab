@@ -8,12 +8,7 @@ import {
     isValidSlug,
     assertSafePath
 } from './paths.ts';
-
-export type Aspect = {
-    dimension: string;
-    verdict: 'like' | 'dislike';
-    note: string;
-};
+import type { Aspect } from './case-loader.ts';
 
 export interface WriteCaseInput {
     client: string;

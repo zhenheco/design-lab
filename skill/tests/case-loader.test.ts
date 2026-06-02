@@ -10,6 +10,7 @@ type CaseFixture = {
     scenario: string;
     sentiment: 'positive' | 'negative';
     quotes_from_user?: string[];
+    aspects?: Array<{ dimension: string; verdict: 'like' | 'dislike'; note: string }>;
     tags?: {
         style?: string[];
         mood?: string[];
@@ -44,6 +45,10 @@ function serializeCaseFrontmatter(clientSlug: string, fixture: CaseFixture): str
         `sentiment: ${fixture.sentiment}`,
         `quotes_from_user: ${JSON.stringify(fixture.quotes_from_user ?? [])}`
     ];
+
+    if (fixture.aspects) {
+        lines.push(`aspects: ${JSON.stringify(fixture.aspects)}`);
+    }
 
     if (fixture.tags) {
         lines.push('tags:');
@@ -239,6 +244,29 @@ test('loadCaseSummaries: sentiment filter matches cases vs anti-library', () => 
     assert.equal(positiveOnly.length, 1);
     assert.equal(positiveOnly[0].slug, '0001');
     assert.equal(positiveOnly[0].sentiment, 'positive');
+});
+
+test('loadCaseSummaries: parses aspectual feedback and defaults legacy cases to []', () => {
+    const aspects = [
+        { dimension: 'typography', verdict: 'like' as const, note: 'x' },
+        { dimension: 'color', verdict: 'dislike' as const, note: '太冷' }
+    ];
+    const vault = setupVault([
+        {
+            slug: '_personal',
+            type: 'self',
+            cases: [
+                { slug: 'aspectual', scenario: 'landing', sentiment: 'positive', aspects },
+                { slug: 'legacy', scenario: 'landing', sentiment: 'positive' }
+            ]
+        }
+    ]);
+
+    const summaries = loadCaseSummaries(vault);
+    const bySlug = new Map(summaries.map((entry) => [entry.slug, entry]));
+
+    assert.deepEqual(bySlug.get('aspectual')?.aspects, aspects);
+    assert.deepEqual(bySlug.get('legacy')?.aspects, []);
 });
 
 test('loadCaseSummaries: missing meta.yaml warns and skips that client', () => {
