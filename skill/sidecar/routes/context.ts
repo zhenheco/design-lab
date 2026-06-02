@@ -34,9 +34,10 @@ export function contextRouter(): Router {
         const clientSlug = typeof req.query.client === 'string' ? req.query.client : undefined;
         const scenario = typeof req.query.scenario === 'string' ? req.query.scenario : undefined;
         const styleGuide = readOptionalFile(getStyleGuidePath());
-        const brandStyleGuide = clientSlug ? readOptionalFile(getClientStyleGuidePath(clientSlug)) : '';
         const scenarioOverride = scenario ? readOptionalFile(getScenarioOverridePath(scenario)) : '';
         const client = clientSlug ? loadClient(clientSlug) : null;
+        const brandStyleGuide =
+            clientSlug && client?.type === 'client' ? readOptionalFile(getClientStyleGuidePath(clientSlug)) : '';
         const allCases = loadCaseSummaries(getVaultPath(), { client: clientSlug, scenario });
         const cases = allCases.filter((entry) => entry.sentiment === 'positive').slice(0, TOP_N_POSITIVE);
         const antiCases = allCases.filter((entry) => entry.sentiment === 'negative');

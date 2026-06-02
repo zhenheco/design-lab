@@ -565,6 +565,32 @@ test('GET /api/context?client=whatcanido -> merges global and per-brand NEVER ru
     );
 });
 
+test('GET /api/context per-brand style guide stays scoped to the requested client', async () => {
+    const vault = setupVault();
+    seedContextBaseFixture(vault);
+    writeClientMeta(vault, 'whatcanido', { type: 'client' });
+    writeClientMeta(vault, 'anotherbrand', { type: 'client' });
+    writeClientStyleGuide(vault, 'whatcanido', '# WhatCanIDo Style Guide\n\nOnly whatcanido.\n');
+    writeClientStyleGuide(vault, 'anotherbrand', '# Another Brand Style Guide\n\nOnly another brand.\n');
+    writeClientStyleGuide(vault, '_personal', '# Personal Client Trap\n\nMust not be returned.\n');
+
+    const whatcanido = await withVaultEnv(vault, () =>
+        createAgent().get('/api/context').set(authHeaders()).query({ client: 'whatcanido' })
+    );
+    const personal = await withVaultEnv(vault, () =>
+        createAgent().get('/api/context').set(authHeaders()).query({ client: '_personal' })
+    );
+    const noClient = await withVaultEnv(vault, () => createAgent().get('/api/context').set(authHeaders()));
+
+    assert.equal(whatcanido.status, 200);
+    assert.equal(whatcanido.body.brandStyleGuide, '# WhatCanIDo Style Guide\n\nOnly whatcanido.\n');
+    assert.doesNotMatch(whatcanido.body.brandStyleGuide, /Another Brand|Personal Client Trap/);
+    assert.equal(personal.status, 200);
+    assert.equal(personal.body.brandStyleGuide, '');
+    assert.equal(noClient.status, 200);
+    assert.equal(noClient.body.brandStyleGuide, '');
+});
+
 test('GET /api/context client+scenario -> scenario filter + override + never rules', async () => {
     const vault = setupVault();
     seedContextBaseFixture(vault);
