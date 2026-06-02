@@ -332,6 +332,28 @@ test('POST /api/cases missing client -> 400', async () => {
     assert.match(response.body.error, /client not registered/);
 });
 
+test('POST /api/feedback valid -> 201 + appends feedback log row', async () => {
+    const vault = setupVault();
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().post('/api/feedback').set(authHeaders()).send({
+            signal: 'too-muted',
+            user_quote: 'This screen needs more visual contrast.'
+        })
+    );
+
+    assert.equal(response.status, 201);
+    assert.deepEqual(response.body, { ok: true });
+
+    const rows = readFileSync(join(vault, 'feedback-log.jsonl'), 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].signal, 'too-muted');
+    assert.equal(rows[0].user_quote, 'This screen needs more visual contrast.');
+});
+
 test('GET /api/style-guide existing -> 200 + content + contentHash', async () => {
     const vault = setupVault();
     writeFileSync(join(vault, 'personal-style-guide.md'), '# Voice\n\nKeep it sharp.\n');
