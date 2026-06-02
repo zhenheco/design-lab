@@ -1,0 +1,136 @@
+# 全免費安全層 GitHub Action — Semgrep (SAST) + Gitleaks (secrets) + Trivy (deps/IaC)
+# Source template: ~/.claude/templates/security-review-workflow.yml (全域安全層)
+# 安裝：bash ~/.claude/scripts/security-bootstrap.sh
+# 三個工具皆免費 open source，無需任何 API key / secret。
+#
+# SARIF upload 行為：
+#   - 公開 repo 或啟用 GitHub Advanced Security 的私有 repo：finding 進 Security tab
+#   - 私有 repo 沒 GHAS：SARIF upload step 會被 GitHub 拒，加了 continue-on-error 不擋 job
+#     finding 改看 step log + workflow summary
+#
+# 額外建議在 repo Settings → Code security 開啟：
+#   - Dependabot alerts (free)
+#   - Dependabot security updates (free)
+#   - Secret scanning + push protection (公開 repo free，私有 repo 需 GHAS)
+
+name: Security Review (Free Stack)
+
+permissions:
+  contents: read
+  security-events: write   # 上傳 SARIF 給 Code Scanning（無 GHAS 時會被 skip）
+  pull-requests: write     # Semgrep PR 留評
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  semgrep:
+    name: Semgrep SAST (OWASP top10 + secrets)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    if: github.actor != 'dependabot[bot]'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Semgrep (JSON for summary)
+        # `semgrep scan`（pure OSS，無需 Semgrep Cloud 帳號）對比 `semgrep ci`（需登入）
+        # CLI 限制：`--output` 不可重複，所以拆成兩次 invocation
+        run: |
+          semgrep scan \
+            --config=p/security-audit \
+            --config=p/owasp-top-ten \
+            --config=p/secrets \
+            --json --output=semgrep.json || true
+
+      - name: Run Semgrep (SARIF for Code Scanning)
+        run: |
+          semgrep scan \
+            --config=p/security-audit \
+            --config=p/owasp-top-ten \
+            --config=p/secrets \
+            --sarif --output=semgrep.sarif || true
+
+      - name: Summarize findings to step output
+        if: always()
+        run: |
+          if [ -f semgrep.json ]; then
+            python3 -c "
+          import json, sys
+          d = json.load(open('semgrep.json'))
+          results = d.get('results', [])
+          if not results:
+            print('## ✅ Semgrep — no findings')
+          else:
+            sev_count = {}
+            for r in results:
+              s = r.get('extra', {}).get('severity', 'INFO')
+              sev_count[s] = sev_count.get(s, 0) + 1
+            print(f'## ⚠️ Semgrep — {len(results)} findings')
+            for s, n in sorted(sev_count.items()):
+              print(f'- {s}: {n}')
+            print()
+            print('### Top 20:')
+            for r in results[:20]:
+              p = r.get('path', '?'); l = r.get('start', {}).get('line', '?')
+              c = r.get('check_id', '?').split('.')[-1]
+              m = (r.get('extra', {}).get('message') or '')[:120]
+              print(f'- \`{p}:{l}\` **{c}** — {m}')
+          " >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload SARIF to Code Scanning
+        if: always()
+        continue-on-error: true   # 私有 repo 無 GHAS 會 fail，不擋 job
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  gitleaks:
+    name: Gitleaks (secrets in diff + history)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 掃 history
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 不需 GITLEAKS_LICENSE — organization-only feature，個人/小團隊免費
+
+  trivy:
+    name: Trivy (deps vuln + IaC + container)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy scan (table output)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '0'   # 報告 finding 但不擋 job（讓 step summary 顯示）
+
+      - name: Trivy scan (SARIF for Code Scanning)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Upload SARIF to Code Scanning
+        if: always()
+        continue-on-error: true   # 私有 repo 無 GHAS 會 fail，不擋 job
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy.sarif
+          category: trivy
