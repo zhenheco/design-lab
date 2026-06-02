@@ -1,5 +1,7 @@
 # design-lab
 
+<samp>**English** · [繁體中文](README.zh-Hant.md) · [简体中文](README.zh-Hans.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português](README.pt-BR.md) · [Русский](README.ru.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md) · [हिन्दी](README.hi.md) · [العربية](README.ar.md) · [Bahasa Indonesia](README.id.md) · [Tiếng Việt](README.vi.md) · [ไทย](README.th.md) · [Polski](README.pl.md)</samp>
+
 **A personal, brand-scoped design-taste memory for Claude Code.**
 
 You see designs you like, give nuanced verdicts ("the typography is great, the palette is too cold"), and they accumulate into a local memory. When you later ask Claude Code to build a frontend, `/design` loads that accumulated taste so the output looks more like *you* — per brand, getting sharper every cycle.
@@ -53,29 +55,40 @@ It is **brand-scoped**: a baseline self-brand (`_personal`) whose taste flows in
 
 ---
 
-## Quick start
+## Install
 
-Requirements: **Node ≥ 20** (the sidecar uses `better-sqlite3` 12.x; Node 26 is fine).
+Requirements: **Node ≥ 20** (the sidecar uses `better-sqlite3` 12.x; Node 26 is fine), and [Claude Code](https://claude.com/claude-code).
+
+One command — clone and run the installer:
 
 ```bash
-npm install
+git clone https://github.com/zhenheco/design-lab.git
+cd design-lab
+bash install.sh
+```
 
-# Install the skill into Claude Code (symlinks skill/ → ~/.claude/skills/design-lab)
-bash deploy.sh
+`install.sh` installs dependencies, builds the dashboard, links the skill into Claude Code (`~/.claude/skills/design-lab`), initialises a vault, starts the sidecar (a launchd daemon on macOS; auto-spawned on demand elsewhere), and prints how to register the MCP server. It is idempotent — safe to re-run after `git pull`.
 
-# Run the sidecar as an always-on launchd daemon (macOS)
-bash skill/scripts/launchd-install.sh
+Verify:
+
+```bash
 curl -s http://127.0.0.1:5174/api/health        # → {"status":"ok"}
 ```
 
-The vault defaults to `~/Documents/CC Cli/design-library`; override with `DESIGN_LAB_VAULT_PATH`. Initialise an empty one with `bash skill/scripts/init-library.sh <path>`.
+The vault defaults to `~/Documents/CC Cli/design-library`; override with `DESIGN_LAB_VAULT_PATH`. To use the `capture_url` screenshot tool, also run `npx playwright install chromium`.
 
-Register the MCP server with your agent by pointing it at `skill/mcp/start.sh` (stdio). It auto-discovers all 7 tools.
+### Register the MCP server
+
+Point your agent at the stdio entry `skill/mcp/start.sh` — it auto-discovers all 7 tools. For example:
+
+```bash
+claude mcp add design-lab -- bash "$(pwd)/skill/mcp/start.sh"
+```
 
 ### Generate with your taste
 
 ```bash
-/design "build a landing hero" whatcanido landing
+/design "build a landing hero" <brand> landing
 ```
 
 ---
