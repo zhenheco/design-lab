@@ -19,12 +19,25 @@ export const addCaseInputSchema = {
 
 export type AddCaseArgs = z.infer<z.ZodObject<typeof addCaseInputSchema>>;
 
+export const listClientsInputSchema = {};
+
 export const getContextInputSchema = {
     client: z.string().optional(),
     scenario: z.string().optional()
 };
 
 export type GetContextArgs = z.infer<z.ZodObject<typeof getContextInputSchema>>;
+
+export const addFeedbackInputSchema = {
+    signal: z.string(),
+    user_quote: z.string(),
+    client: z.string().optional(),
+    case_slug: z.string().optional(),
+    dimension: z.string().optional(),
+    derived_rule: z.string().optional()
+};
+
+export type AddFeedbackArgs = z.infer<z.ZodObject<typeof addFeedbackInputSchema>>;
 
 export const editStyleGuideInputSchema = {
     brand: z.string().optional(),
@@ -50,6 +63,13 @@ export function buildAddCaseRequest(args: AddCaseArgs): SidecarRequest {
     };
 }
 
+export function buildListClientsRequest(): SidecarRequest {
+    return {
+        method: 'GET',
+        path: '/api/clients'
+    };
+}
+
 export function buildGetContextRequest(args: GetContextArgs): SidecarRequest {
     return {
         method: 'GET',
@@ -57,6 +77,21 @@ export function buildGetContextRequest(args: GetContextArgs): SidecarRequest {
         query: {
             client: args.client,
             scenario: args.scenario
+        }
+    };
+}
+
+export function buildAddFeedbackRequest(args: AddFeedbackArgs): SidecarRequest {
+    return {
+        method: 'POST',
+        path: '/api/feedback',
+        body: {
+            signal: args.signal,
+            user_quote: args.user_quote,
+            client: args.client,
+            case_slug: args.case_slug,
+            dimension: args.dimension,
+            derived_rule: args.derived_rule
         }
     };
 }
