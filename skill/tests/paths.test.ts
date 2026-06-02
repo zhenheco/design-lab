@@ -7,6 +7,7 @@ import {
   getAntiCasePath,
   getClientMetaPath,
   getStyleGuidePath,
+  getClientStyleGuidePath,
   getScenarioOverridePath,
   getIndexDbPath,
   isValidSlug,
@@ -33,6 +34,7 @@ test('paths: derived paths', () => {
   assert.equal(getAntiCasePath('aicycle', '0001'), '/tmp/v/clients/aicycle/anti-library/0001.md');
   assert.equal(getClientMetaPath('aicycle'), '/tmp/v/clients/aicycle/meta.yaml');
   assert.equal(getStyleGuidePath(), '/tmp/v/personal-style-guide.md');
+  assert.equal(getClientStyleGuidePath('whatcanido'), '/tmp/v/clients/whatcanido/style-guide.md');
   assert.equal(getScenarioOverridePath('landing'), '/tmp/v/scenario-overrides/landing.md');
   assert.equal(getIndexDbPath(), '/tmp/v/.index/library.db');
   delete process.env.DESIGN_LAB_VAULT_PATH;
@@ -55,5 +57,17 @@ test('paths: assertSafePath blocks traversal', () => {
   assert.doesNotThrow(() => assertSafePath('/tmp/v/clients/aicycle/cases/x.md'));
   assert.throws(() => assertSafePath('/tmp/v/../../etc/passwd'), /Path traversal blocked/);
   assert.throws(() => assertSafePath('/etc/passwd'), /Path traversal blocked/);
+  delete process.env.DESIGN_LAB_VAULT_PATH;
+});
+
+test('paths: getClientStyleGuidePath rejects invalid slugs', () => {
+  process.env.DESIGN_LAB_VAULT_PATH = '/tmp/v';
+  for (const slug of ['../../etc', 'a/b', '']) {
+    assert.throws(
+      () => getClientStyleGuidePath(slug),
+      /invalid client slug/,
+      `expected ${slug} to be rejected`
+    );
+  }
   delete process.env.DESIGN_LAB_VAULT_PATH;
 });

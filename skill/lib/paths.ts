@@ -28,7 +28,12 @@ export function getStyleGuidePath(): string {
 }
 
 export function getClientStyleGuidePath(slug: string): string {
-  return join(getClientDir(slug), 'style-guide.md');
+  if (!isValidSlug(slug)) {
+    throw new Error(`invalid client slug: ${slug}`);
+  }
+  const styleGuidePath = join(getClientDir(slug), 'style-guide.md');
+  assertSafePath(styleGuidePath);
+  return styleGuidePath;
 }
 
 export function getScenarioOverridePath(scenario: string): string {
