@@ -150,3 +150,96 @@ test('POST /api/capture/url captures a fixture URL and writes a design case with
         await fixture.close();
     }
 });
+
+test('POST /api/capture/url without token returns 401', async () => {
+    const vault = setupVault();
+
+    const response = await withEnv(
+        {
+            DESIGN_LAB_VAULT_PATH: vault,
+            DESIGN_LAB_API_TOKEN: 'test-token-for-capture-url',
+            NODE_ENV: 'test'
+        },
+        () =>
+            request(createApp()).post('/api/capture/url').set('Host', '127.0.0.1:5174').send({
+                url: 'http://127.0.0.1/example',
+                client: 'whatcanido',
+                scenario: 'landing',
+                quote: 'No token should be rejected before capture.'
+            })
+    );
+
+    assert.equal(response.status, 401);
+});
+
+test('POST /api/capture/url rejects non-http URLs before capture', async () => {
+    const vault = setupVault();
+
+    const response = await withEnv(
+        {
+            DESIGN_LAB_VAULT_PATH: vault,
+            DESIGN_LAB_API_TOKEN: 'test-token-for-capture-url',
+            NODE_ENV: 'test'
+        },
+        () =>
+            request(createApp()).post('/api/capture/url').set(authHeaders()).send({
+                url: 'file:///etc/passwd',
+                client: 'whatcanido',
+                scenario: 'landing',
+                quote: 'Local files are not capture sources.'
+            })
+    );
+
+    assert.equal(response.status, 400);
+});
+
+test('POST /api/capture/url returns 404 for an unknown client before capture', async () => {
+    const vault = setupVault();
+
+    const response = await withEnv(
+        {
+            DESIGN_LAB_VAULT_PATH: vault,
+            DESIGN_LAB_API_TOKEN: 'test-token-for-capture-url',
+            NODE_ENV: 'test'
+        },
+        () =>
+            request(createApp()).post('/api/capture/url').set(authHeaders()).send({
+                url: 'http://127.0.0.1/example',
+                client: 'missing-client',
+                scenario: 'landing',
+                quote: 'Unknown client should not trigger capture.'
+            })
+    );
+
+    assert.equal(response.status, 404);
+});
+
+test('POST /api/capture/url rejects invalid scenario before writing a case', { timeout: 30_000 }, async () => {
+    const vault = setupVault();
+    const fixture = await serveHtml(`<!doctype html>
+        <html>
+            <head><title>Invalid Scenario Fixture</title></head>
+            <body><h1>Invalid Scenario Fixture</h1></body>
+        </html>`);
+
+    try {
+        const response = await withEnv(
+            {
+                DESIGN_LAB_VAULT_PATH: vault,
+                DESIGN_LAB_API_TOKEN: 'test-token-for-capture-url',
+                NODE_ENV: 'test'
+            },
+            () =>
+                request(createApp()).post('/api/capture/url').set(authHeaders()).send({
+                    url: fixture.url,
+                    client: 'whatcanido',
+                    scenario: 'print',
+                    quote: 'Invalid scenario should not write.'
+                })
+        );
+
+        assert.equal(response.status, 400);
+    } finally {
+        await fixture.close();
+    }
+});

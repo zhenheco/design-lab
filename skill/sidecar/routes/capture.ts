@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { Router } from 'express';
-import { captureUrl } from '../../lib/capture/url-capture.ts';
+import { CaptureUrlError, captureUrl } from '../../lib/capture/url-capture.ts';
 import { writeCase } from '../../lib/case-writer.ts';
 import { loadClient } from '../../lib/client-loader.ts';
 import { getAntiCasePath, getCasePath } from '../../lib/paths.ts';
@@ -44,6 +44,15 @@ function titleOrHost(title: string, url: string): string {
     return new URL(url).hostname;
 }
 
+function isHttpUrl(value: string): boolean {
+    try {
+        const url = new URL(value);
+        return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+        return false;
+    }
+}
+
 export function captureRouter(): Router {
     const router = Router();
 
@@ -53,9 +62,29 @@ export function captureRouter(): Router {
             return;
         }
 
-        const { url, client, quote } = req.body;
+        const { url, client, quote, scenario } = req.body;
         if (typeof url !== 'string' || typeof client !== 'string' || typeof quote !== 'string') {
             res.status(400).json({ error: 'invalid capture payload' });
+            return;
+        }
+
+        if (!isHttpUrl(url)) {
+            res.status(400).json({ error: 'url must use http or https' });
+            return;
+        }
+
+        if (scenario !== 'landing' && scenario !== 'saas-ui' && scenario !== 'brand' && scenario !== 'content') {
+            res.status(400).json({ error: 'invalid scenario' });
+            return;
+        }
+
+        if (
+            'sentiment' in req.body &&
+            req.body.sentiment !== undefined &&
+            req.body.sentiment !== 'positive' &&
+            req.body.sentiment !== 'negative'
+        ) {
+            res.status(400).json({ error: 'invalid sentiment' });
             return;
         }
 
@@ -74,7 +103,7 @@ export function captureRouter(): Router {
                 client,
                 slug,
                 sentiment: (typeof req.body.sentiment === 'string' ? req.body.sentiment : 'positive') as Sentiment,
-                scenario: req.body.scenario as Scenario,
+                scenario: scenario as Scenario,
                 quote,
                 sourceImagePath: capture.imagePath,
                 tokens: capture.tokens
@@ -86,6 +115,11 @@ export function captureRouter(): Router {
                 tokens: capture.tokens
             });
         } catch (error) {
+            if (error instanceof CaptureUrlError && error.code === 'invalid_url') {
+                res.status(400).json({ error: error.message });
+                return;
+            }
+
             next(error);
         }
     });
