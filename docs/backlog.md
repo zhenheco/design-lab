@@ -9,6 +9,11 @@ Deferred:
 - 🟡 **Unbounded file read:** `readOptionalFile` (`context.ts`) reads styleGuide / scenarioOverride / brandStyleGuide with no size cap, serialized whole into the JSON response. Pre-existing class; add a size cap across all callers.
 - **chore(security):** `npm audit` reports 2 moderate vulns after the better-sqlite3 12.x bump — triage `npm audit`.
 
+## From v0.4 Phase 1 (MCP server + launchd, 2026-06-02)
+
+- 🟡 **MCP Host header fixed value:** `skill/mcp/sidecar-client.ts` sends `Host: 127.0.0.1:5174` always (matches the sidecar's fixed host-allowlist; this is why ephemeral-port integration tests pass). If `DESIGN_LAB_SIDECAR_URL` is ever pointed at a non-`:5174` host, the host-allowlist must be extended too. Documented constraint, not a bug.
+- 🟡 **launchd re-install over crash-looping service:** `launchd-install.sh`'s inline `bootout || true` can fail with `Bootstrap failed: 5: Input/output error` when re-installing over an already-loaded/crash-looping instance; a clean `launchd-uninstall.sh` first resolves it. Harden install to wait for bootout to settle (or retry bootstrap) before bootstrap.
+
 ## Infra (resolved)
 
 - ✅ **node26 × better-sqlite3:** Homebrew default node v26 could not gyp-build better-sqlite3@11.10.0 (V8 API errors) → sidecar/full-suite broke on node26. Fixed by bumping to better-sqlite3@12.10.0 (prebuilt binaries, gyp-free). `engines: >=20` is fine with 12.x.
