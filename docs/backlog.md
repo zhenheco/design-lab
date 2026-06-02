@@ -19,6 +19,11 @@ Deferred:
 - 🟡 **/design fallback fragility:** `design.sh` `render_fallback` (sidecar-down path) calls case-loader and `exit 1` on failure (`set -e`); a double failure (sidecar down AND vault corrupt) hard-exits instead of degrading gracefully. Rare (launchd daemon makes the fallback path seldom taken). Make fallback echo + continue.
 - 🟡 **URL capture SSRF depth:** `captureUrl` blocks literal private/loopback hosts + `localhost`, but does not DNS-resolve hostnames (a public host resolving to a private IP / DNS-rebinding is not caught). Acceptable for the local, token-protected, user-reviewed-cron threat model; revisit if capture is ever exposed beyond local.
 
+## From v0.4 Phase 3 (auto-distill, 2026-06-02)
+
+- 🟡 **Stateless re-proposal noise:** `distill_taste` recomputes clusters each call, so an already-distilled cluster keeps reappearing until the user has added a covering NEVER rule (Hermes dedups against `get_context.neverRules`). If noise grows, add a "distilled" watermark on cases (e.g. a `distilled_at` marker) so addressed clusters drop out. Deferred per ADR-0005.
+- 🟡 **Feedback verdict heuristic is keyword-based:** `verdictFromSignal` classifies a feedback `signal` as like/dislike by substring match (dislike/negative/avoid/bad · like/positive/good/prefer). A signal with neither keyword is silently skipped from distillation (still stored). Acceptable — `aspects` are the primary structured signal; feedback is secondary. Revisit if many feedback entries fail to classify.
+
 ## Infra (resolved)
 
 - ✅ **node26 × better-sqlite3:** Homebrew default node v26 could not gyp-build better-sqlite3@11.10.0 (V8 API errors) → sidecar/full-suite broke on node26. Fixed by bumping to better-sqlite3@12.10.0 (prebuilt binaries, gyp-free). `engines: >=20` is fine with 12.x.
@@ -31,7 +36,7 @@ Deferred:
 - Phase 0.5/1: sidecar → launchd always-on daemon (ADR-0002).
 - Phase 1: MCP server wrapping sidecar (`get_context`/`list_clients`/`add_case`/`add_feedback`/`edit_style_guide`) + build-time contract test; `hermes mcp add design-lab`.
 - Phase 2: capture adapters (URL screenshot, Obsidian `aa` promotion; chat-image lands with Phase 1; local-image already works).
-- Phase 3: compound (feedback logging + Hermes-assisted curation; approval-gated auto-distill later).
+- ✅ Phase 3: compound — deterministic `aggregateDistill` + `GET /api/distill/:brand` + MCP `distill_taste` (#7); Hermes drafts rule text from clusters, user approves, persists via `edit_style_guide` (ADR-0005). 277 pass.
 
 ## Pre-existing (from v0.3 SKILL.md)
 
