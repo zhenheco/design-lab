@@ -29,7 +29,7 @@ All open v0.4 🟡 closed in one hardening pass (2 Codex TDD batches + 1 securit
 - Phase 2: capture adapters (URL screenshot, Obsidian `aa` promotion; chat-image lands with Phase 1; local-image already works).
 - ✅ Phase 3: compound — deterministic `aggregateDistill` + `GET /api/distill/:brand` + MCP `distill_taste` (#7); Hermes drafts rule text from clusters, user approves, persists via `edit_style_guide` (ADR-0005). 277 pass.
 
-## Pre-existing (from v0.3 SKILL.md)
+## Pre-existing (from v0.3 SKILL.md) — ✅ resolved 2026-06-02
 
-- E2E dashboard Playwright selectors need fixing (not blocking phase tag).
-- open-design Bridge fidelity: currently blind-dumps `/api/context` JSON (no semantic NEVER framing). Revisit if open-design daily use grows.
+- ✅ **E2E dashboard:** the old "Playwright selectors" note was stale — no Playwright suite ever existed; dashboard component tests (24) + `astro check` (0 err) already pass, and root `test:e2e` was a *dangling* reference to a non-existent dashboard script. Replaced with a real lightweight HTTP E2E smoke `skill/tests/dashboard-e2e.test.js` (boots `startServer(0)` incl. dashboard mount, asserts `GET /` → 200 HTML `<title>Design Lab`, `GET /api/health` → ok; skips if dist unbuilt). `test:e2e` repointed to it. `713c476`,`14672fe`. **298 unit + 2 e2e pass.**
+- ✅ **open-design Bridge fidelity:** `design-memory-bridge` (open-design fork, commit `cd2bf563`) no longer blind-dumps `/api/context` JSON. New pure `framePrompt()` semantically frames it: brand guide (follow) / scenario override / **HARD CONSTRAINTS NEVER** / liked references (emulate) / anti-patterns (avoid). Fail-soft preserved; `design-lab-context.test.ts` 3 pass. Mirrors `design.sh` render_context framing + the v0.3 §3.4 bridge contract.
