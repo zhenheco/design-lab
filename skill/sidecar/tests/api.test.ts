@@ -472,6 +472,7 @@ test('GET /api/context?client=ghost -> unknown client returns null + self union 
 
     assert.equal(response.status, 200);
     assert.equal(response.body.client, null);
+    assert.equal(response.body.brandStyleGuide, '');
     assert.deepEqual(response.body.retrievedFrom, ['_personal', 'zhenheco']);
     assert.deepEqual(summarizeResponseClients(response.body), ['_personal', 'zhenheco']);
 });
