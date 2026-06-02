@@ -18,6 +18,7 @@
     "express": "^4.21.0",
     "gray-matter": "^4.0.3",
     "js-yaml": "^3.14",
+    "playwright": "^1.60.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
