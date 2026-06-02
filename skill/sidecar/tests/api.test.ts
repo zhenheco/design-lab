@@ -131,6 +131,13 @@ function writeCaseMarkdown(vault: string, clientSlug: string, fixture: CaseFixtu
     );
 }
 
+function writeFeedbackLog(vault: string, entries: Array<Record<string, unknown>>) {
+    writeFileSync(
+        join(vault, 'feedback-log.jsonl'),
+        entries.map((entry) => JSON.stringify(entry)).join('\n') + '\n'
+    );
+}
+
 function writeStyleGuide(vault: string, content: string) {
     writeFileSync(join(vault, 'personal-style-guide.md'), content);
 }
@@ -936,6 +943,60 @@ test('GET /api/context antiCases return all negatives in scope', async () => {
     assert.equal(response.status, 200);
     assert.equal(response.body.antiCases.length, 6);
     assert.ok(response.body.antiCases.every((entry: { client: string; scenario: string; sentiment: string }) => entry.client === '_personal' && entry.scenario === 'landing' && entry.sentiment === 'negative'));
+});
+
+test('GET /api/distill/:brand returns deterministic clusters from scoped cases and feedback', async () => {
+    const vault = setupVault();
+    writeClientMeta(vault, '_personal', { type: 'self' });
+    writeClientMeta(vault, 'whatcanido', { type: 'client' });
+    writeClientMeta(vault, 'otherbrand', { type: 'client' });
+    writeCaseMarkdown(vault, 'whatcanido', {
+        slug: 'cold-hero',
+        scenario: 'landing',
+        sentiment: 'negative',
+        aspects: [{ dimension: 'color', verdict: 'dislike', note: 'Cold blue hero.' }]
+    });
+    writeFeedbackLog(vault, [
+        { client: 'whatcanido', dimension: 'color', signal: 'dislike', user_quote: '太冷' },
+        { client: '_personal', dimension: 'color', signal: 'avoid', user_quote: '不要冷藍' },
+        { client: 'otherbrand', dimension: 'color', signal: 'bad', user_quote: 'must be excluded' }
+    ]);
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().get('/api/distill/whatcanido').set('Host', '127.0.0.1:5174').query({ minSupport: '2' })
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.brand, 'whatcanido');
+    assert.equal(response.body.minSupport, 2);
+    assert.deepEqual(response.body.clusters, [
+        {
+            dimension: 'color',
+            verdict: 'dislike',
+            count: 3,
+            caseSlugs: ['cold-hero'],
+            feedbackQuotes: ['太冷', '不要冷藍'],
+            notes: ['Cold blue hero.', '太冷', '不要冷藍']
+        }
+    ]);
+});
+
+test('GET /api/distill/:brand rejects invalid slugs and defaults invalid minSupport', async () => {
+    const vault = setupVault();
+    writeClientMeta(vault, 'whatcanido', { type: 'client' });
+
+    const invalidSlug = await withVaultEnv(vault, () =>
+        createAgent().get('/api/distill/bad%20brand').set('Host', '127.0.0.1:5174')
+    );
+    const invalidMinSupport = await withVaultEnv(vault, () =>
+        createAgent().get('/api/distill/whatcanido').set('Host', '127.0.0.1:5174').query({ minSupport: 'abc' })
+    );
+
+    assert.equal(invalidSlug.status, 400);
+    assert.deepEqual(invalidSlug.body, { error: 'invalid brand slug' });
+    assert.equal(invalidMinSupport.status, 200);
+    assert.equal(invalidMinSupport.body.minSupport, 2);
+    assert.deepEqual(invalidMinSupport.body.clusters, []);
 });
 
 // === Destructive QA regressions ===

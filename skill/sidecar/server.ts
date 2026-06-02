@@ -7,6 +7,7 @@ import { requireHostAllowlist, requireTokenForWrites } from './middleware/auth.t
 import { casesRouter } from './routes/cases.ts';
 import { clientsRouter } from './routes/clients.ts';
 import { contextRouter } from './routes/context.ts';
+import { distillRouter } from './routes/distill.ts';
 import { captureRouter } from './routes/capture.ts';
 import { feedbackRouter } from './routes/feedback.ts';
 import { scenarioOverridesRouter } from './routes/scenario-overrides.ts';
@@ -67,6 +68,7 @@ export function createApp(): Express {
     app.use('/api/style-guide', styleGuideRouter());
     app.use('/api/scenario-overrides', scenarioOverridesRouter());
     app.use('/api/context', contextRouter());
+    app.use('/api/distill', distillRouter());
     // δ1 scaffold: dashboard mount placeholder
     // Dashboard handler can be mounted by the sidecar after the Astro app is built:
     // import('../dashboard/dist/server/entry.mjs').then((m) => app.use(m.handler));
