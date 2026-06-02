@@ -1,28 +1,19 @@
 # Design Lab Backlog
 
-## From v0.4 Phase 0a cross-review (2026-06-02, 3-lens adversarial, 0🔴/6🟡)
+## ✅ 2026-06-02 🟡 sweep — ALL resolved (UAT 32/32 green, 296 unit pass, npm audit 0)
 
-Resolved in Phase 0a: vision-responsibility doc, base64→path contract, sidecar launchd plan, P0 acceptance target, security self-guard (`getClientStyleGuidePath` now `isValidSlug`+`assertSafePath`), ghost-client assertion, empty-global+brand-only NEVER test, build-time contract test (Phase 1).
+All open v0.4 🟡 closed in one hardening pass (2 Codex TDD batches + 1 security fix; cavecrew-reviewer cross-review caught a host-allowlist bypass, empirically confirmed + fixed). main `f66501b`.
 
-Deferred:
-- 🟡 **Test isolation (global vault path):** per-brand `/api/context` tests mutate the process-global `DESIGN_LAB_VAULT_PATH` via `withVaultEnv`; under heavy concurrent load this can flake (observed brandStyleGuide=='' / lost brand neverRule). Impl logic is correct. Fix: thread an explicit vault through the route/app factory in tests, or isolate each test in its own process. Ref `skill/sidecar/tests/api.test.ts`.
-- 🟡 **Unbounded file read:** `readOptionalFile` (`context.ts`) reads styleGuide / scenarioOverride / brandStyleGuide with no size cap, serialized whole into the JSON response. Pre-existing class; add a size cap across all callers.
-- **chore(security):** `npm audit` reports 2 moderate vulns after the better-sqlite3 12.x bump — triage `npm audit`.
-
-## From v0.4 Phase 1 (MCP server + launchd, 2026-06-02)
-
-- 🟡 **MCP Host header fixed value:** `skill/mcp/sidecar-client.ts` sends `Host: 127.0.0.1:5174` always (matches the sidecar's fixed host-allowlist; this is why ephemeral-port integration tests pass). If `DESIGN_LAB_SIDECAR_URL` is ever pointed at a non-`:5174` host, the host-allowlist must be extended too. Documented constraint, not a bug.
-- 🟡 **launchd re-install over crash-looping service:** `launchd-install.sh`'s inline `bootout || true` can fail with `Bootstrap failed: 5: Input/output error` when re-installing over an already-loaded/crash-looping instance; a clean `launchd-uninstall.sh` first resolves it. Harden install to wait for bootout to settle (or retry bootstrap) before bootstrap.
-
-## From v0.4 Phase 2 (capture + use-side, 2026-06-02)
-
-- 🟡 **/design fallback fragility:** `design.sh` `render_fallback` (sidecar-down path) calls case-loader and `exit 1` on failure (`set -e`); a double failure (sidecar down AND vault corrupt) hard-exits instead of degrading gracefully. Rare (launchd daemon makes the fallback path seldom taken). Make fallback echo + continue.
-- 🟡 **URL capture SSRF depth:** `captureUrl` blocks literal private/loopback hosts + `localhost`, but does not DNS-resolve hostnames (a public host resolving to a private IP / DNS-rebinding is not caught). Acceptable for the local, token-protected, user-reviewed-cron threat model; revisit if capture is ever exposed beyond local.
-
-## From v0.4 Phase 3 (auto-distill, 2026-06-02)
-
-- 🟡 **Stateless re-proposal noise:** `distill_taste` recomputes clusters each call, so an already-distilled cluster keeps reappearing until the user has added a covering NEVER rule (Hermes dedups against `get_context.neverRules`). If noise grows, add a "distilled" watermark on cases (e.g. a `distilled_at` marker) so addressed clusters drop out. Deferred per ADR-0005.
-- 🟡 **Feedback verdict heuristic is keyword-based:** `verdictFromSignal` classifies a feedback `signal` as like/dislike by substring match (dislike/negative/avoid/bad · like/positive/good/prefer). A signal with neither keyword is silently skipped from distillation (still stored). Acceptable — `aspects` are the primary structured signal; feedback is secondary. Revisit if many feedback entries fail to classify.
+- ✅ **#2 Unbounded file read:** `readOptionalFile` (`context.ts`) now caps at `MAX_CONTEXT_FILE_BYTES = 256KB` (statSync; >cap reads first cap bytes + `<!-- truncated -->` marker). `4131867`.
+- ✅ **#3 npm audit (qs DoS):** `npm audit fix` (no --force) → qs 6.15.2 / express 4.22.2, **0 vulnerabilities**. `6e526a5`.
+- ✅ **#4 MCP Host fixed value:** `sidecar-client.ts` derives `Host` from the configured sidecar URL; `auth.ts` host-allowlist now accepts any **loopback hostname** (127.0.0.1/localhost/::1) on **any port** while rejecting non-loopback hosts (DNS-rebinding defense preserved). `b119c78`.
+- ✅ **#4b host-allowlist userinfo bypass** (found in cross-review): `new URL('http://evil.com@127.0.0.1').hostname === '127.0.0.1'` let `Host: evil.com@127.0.0.1:5174` pass `isLoopbackHost`. Fixed: reject any Host containing `@` (RFC 7230 forbids userinfo in Host). `f66501b`. UAT confirms evil.com / evil.com@127.0.0.1 / user:pass@127.0.0.1 → 403 on guarded routes.
+- ✅ **#5 launchd reinstall race:** `launchd-install.sh` waits for bootout to settle (poll `launchctl print`) then retries bootstrap ≤5× (treats "already loaded" as success). UAT: install ×2 back-to-back, no I/O error. `7bedef0`.
+- ✅ **#6 /design fallback fragility:** `design.sh` `render_fallback` guards `cat personal-style-guide.md` + makes case-loader non-fatal → sidecar-down + missing vault file still prints INSTRUCTIONS and exits 0. `3cedd6e`.
+- ✅ **#7 URL capture SSRF DNS depth:** `assertPublicHost` DNS-resolves hostnames and blocks any resolving to a private/loopback address (literal-IP / allowPrivate skip lookup). Injectable lookup for tests. `8e840a7`. (Residual TOCTOU between resolve and Playwright re-resolve is the documented local-threat-model limit.)
+- ✅ **#8 distill re-proposal noise:** `/api/distill/:brand` + `aggregateDistill` now return `existingNeverRuleIds` (global+brand rule ids) so Hermes dedups inline. `d04c8e6`. **Full "distilled watermark" on cases stays deferred per ADR-0005** (zero cases exist yet, no observed noise — YAGNI).
+- ✅ **#9 feedback verdict heuristic:** explicit `verdict?: 'like'|'dislike'` on `FeedbackEntry` + feedback route (400 on invalid) + `add_feedback` MCP schema; `aggregateDistill` uses `entry.verdict ?? verdictFromSignal(signal)`. Keyword fallback retained for unstructured feedback. `8d9ebde`.
+- ✅ **Test isolation (Phase 0a 🟡):** already resolved in Phase 2a (serialized env-mutating api.test.ts + isolated ensure-sidecar port test).
 
 ## Infra (resolved)
 
