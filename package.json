@@ -2,6 +2,7 @@
   "name": "design-lab",
   "version": "0.2.0-dev",
   "description": "Personal brand design system Claude Code skill",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "test": "node --test --import tsx \"skill/tests/**/*.test.{js,ts}\" \"skill/sidecar/tests/**/*.test.ts\" \"skill/scripts/tests/**/*.test.ts\"",
