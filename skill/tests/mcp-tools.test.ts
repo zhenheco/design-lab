@@ -5,8 +5,10 @@ import {
     addCaseInputSchema,
     buildAddCaseRequest,
     buildCaptureUrlRequest,
+    buildDistillTasteRequest,
     buildEditStyleGuideRequest,
-    captureUrlInputSchema
+    captureUrlInputSchema,
+    distillTasteInputSchema
 } from '../mcp/tools.ts';
 
 test('MCP add_case mapper posts the full case body with sourceImagePath as a path string', () => {
@@ -103,5 +105,32 @@ test('MCP capture_url mapper posts URL capture requests to the sidecar', () => {
             slug: 'example-home',
             aspects
         }
+    });
+});
+
+test('MCP distill_taste mapper gets brand clusters with optional minSupport', () => {
+    const args = z.object(distillTasteInputSchema).parse({
+        brand: 'whatcanido',
+        minSupport: 3
+    });
+    const request = buildDistillTasteRequest(args);
+
+    assert.deepEqual(request, {
+        method: 'GET',
+        path: '/api/distill/whatcanido',
+        query: { minSupport: '3' }
+    });
+});
+
+test('MCP distill_taste mapper leaves minSupport undefined when omitted', () => {
+    const args = z.object(distillTasteInputSchema).parse({
+        brand: 'whatcanido'
+    });
+    const request = buildDistillTasteRequest(args);
+
+    assert.deepEqual(request, {
+        method: 'GET',
+        path: '/api/distill/whatcanido',
+        query: { minSupport: undefined }
     });
 });

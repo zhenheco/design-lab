@@ -47,6 +47,13 @@ export const getContextInputSchema = {
 
 export type GetContextArgs = z.infer<z.ZodObject<typeof getContextInputSchema>>;
 
+export const distillTasteInputSchema = {
+    brand: z.string(),
+    minSupport: z.number().int().positive().optional()
+};
+
+export type DistillTasteArgs = z.infer<z.ZodObject<typeof distillTasteInputSchema>>;
+
 export const addFeedbackInputSchema = {
     signal: z.string(),
     user_quote: z.string(),
@@ -105,6 +112,16 @@ export function buildGetContextRequest(args: GetContextArgs): SidecarRequest {
         query: {
             client: args.client,
             scenario: args.scenario
+        }
+    };
+}
+
+export function buildDistillTasteRequest(args: DistillTasteArgs): SidecarRequest {
+    return {
+        method: 'GET',
+        path: `/api/distill/${encodeURIComponent(args.brand)}`,
+        query: {
+            minSupport: args.minSupport === undefined ? undefined : String(args.minSupport)
         }
     };
 }

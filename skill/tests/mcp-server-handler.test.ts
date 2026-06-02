@@ -36,7 +36,7 @@ test('MCP get_context tool handler returns fail-soft error when sidecar is unava
     });
 });
 
-test('MCP server tools/list includes capture_url as the sixth tool', async () => {
+test('MCP server tools/list includes distill_taste as the seventh tool', async () => {
     const server = createMcpServer();
     const client = new Client({ name: 'design-lab-test-client', version: '0.0.0' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -56,7 +56,8 @@ test('MCP server tools/list includes capture_url as the sixth tool', async () =>
             'add_case',
             'add_feedback',
             'edit_style_guide',
-            'capture_url'
+            'capture_url',
+            'distill_taste'
         ]);
     } finally {
         await client.close();

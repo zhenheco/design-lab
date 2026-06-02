@@ -9,16 +9,19 @@ import {
     buildAddCaseRequest,
     buildAddFeedbackRequest,
     buildCaptureUrlRequest,
+    buildDistillTasteRequest,
     buildEditStyleGuideRequest,
     buildGetContextRequest,
     buildListClientsRequest,
     captureUrlInputSchema,
+    distillTasteInputSchema,
     editStyleGuideInputSchema,
     getContextInputSchema,
     listClientsInputSchema,
     type AddCaseArgs,
     type AddFeedbackArgs,
     type CaptureUrlArgs,
+    type DistillTasteArgs,
     type EditStyleGuideArgs,
     type GetContextArgs,
     type SidecarRequest
@@ -76,6 +79,10 @@ export async function handleAddCaseTool(args: AddCaseArgs): Promise<ToolResult> 
 
 export async function handleCaptureUrlTool(args: CaptureUrlArgs): Promise<ToolResult> {
     return handleSidecarRequest(buildCaptureUrlRequest(args));
+}
+
+export async function handleDistillTasteTool(args: DistillTasteArgs): Promise<ToolResult> {
+    return handleSidecarRequest(buildDistillTasteRequest(args));
 }
 
 export async function handleAddFeedbackTool(args: AddFeedbackArgs): Promise<ToolResult> {
@@ -141,6 +148,15 @@ export function createMcpServer(): McpServer {
             inputSchema: captureUrlInputSchema
         },
         (args) => handleCaptureUrlTool(args)
+    );
+
+    server.registerTool(
+        'distill_taste',
+        {
+            description: 'Cluster a brand\'s accumulated like/dislike aspects + feedback into NEVER-rule / style-note candidates (deterministic; does not write). Hermes drafts the rule text and the user approves before edit_style_guide persists it.',
+            inputSchema: distillTasteInputSchema
+        },
+        (args) => handleDistillTasteTool(args)
     );
 
     return server;
