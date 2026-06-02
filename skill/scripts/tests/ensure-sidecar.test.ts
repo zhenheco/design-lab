@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { createServer as createNetServer } from 'node:net';
 import {
     chmodSync,
@@ -213,6 +214,51 @@ async function startDummyPortOwner(port: number): Promise<ChildProcess> {
     return child;
 }
 
+async function startHealthyHealthServer(port: number): Promise<ChildProcess> {
+    const child = spawn(
+        process.execPath,
+        [
+            '-e',
+            [
+                "const http = require('node:http');",
+                "const server = http.createServer((req, res) => {",
+                "  if (req.url && req.url.startsWith('/api/health')) {",
+                "    res.writeHead(200, {'content-type':'application/json'});",
+                "    res.end(JSON.stringify({ok:true}));",
+                "    return;",
+                "  }",
+                "  res.writeHead(404); res.end();",
+                '});',
+                `server.listen(${port}, '127.0.0.1', () => console.log('ready'));`,
+                "process.on('SIGTERM', () => server.close(() => process.exit(0)));"
+            ].join('')
+        ],
+        { stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+    extraProcesses.push(child);
+
+    await new Promise<void>((resolvePromise, reject) => {
+        const timer = setTimeout(() => reject(new Error('healthy health server did not start')), 5_000);
+        child.stdout.setEncoding('utf8');
+        child.stdout.on('data', (chunk) => {
+            if (String(chunk).includes('ready')) {
+                clearTimeout(timer);
+                resolvePromise();
+            }
+        });
+        child.on('exit', (code) => {
+            clearTimeout(timer);
+            reject(new Error(`healthy health server exited early with ${code}`));
+        });
+    });
+
+    return child;
+}
+
+function fileHash(path: string): string {
+    return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
 afterEach(async () => {
     if (currentFixture) {
         await killPid(readPid(currentFixture));
@@ -257,6 +303,21 @@ test('already-running: healthy PID exits quickly without respawn', async () => {
     assert.equal(second.status, 0, second.stderr);
     assert.equal(readPid(fixture), firstPid);
     assert.ok(elapsed < 1_000, `expected <1s, got ${elapsed}ms`);
+});
+
+test('already-running: healthy sidecar without PID exits without rotating token', async () => {
+    const fixture = await createFixture();
+    mkdirSync(fixture.stateDir, { recursive: true });
+    writeFileSync(fixture.tokenFile, 'daemon-held-token\n', { mode: 0o600 });
+    await startHealthyHealthServer(fixture.port);
+    const tokenHashBefore = fileHash(fixture.tokenFile);
+
+    const result = runEnsure(fixture);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(fileHash(fixture.tokenFile), tokenHashBefore);
+    assert.equal(readFileSync(fixture.tokenFile, 'utf8'), 'daemon-held-token\n');
+    assert.equal(existsSync(fixture.pidFile), false, 'healthy sidecar without PID should not be respawned');
 });
 
 test('stale-pid: removes dead PID and spawns a new sidecar', async () => {

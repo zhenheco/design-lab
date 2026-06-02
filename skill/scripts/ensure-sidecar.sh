@@ -15,6 +15,10 @@ LOG_FILE="${TMPDIR:-/tmp}/design-lab-sidecar.log"
 
 mkdir -p "$STATE_DIR"
 
+if curl -sf "$HEALTH_URL" > /dev/null 2>&1; then
+    exit 0
+fi
+
 wait_for_concurrent_spawn() {
     for _ in $(seq 1 30); do
         if curl -sf "$HEALTH_URL" > /dev/null 2>&1; then
