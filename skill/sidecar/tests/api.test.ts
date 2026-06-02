@@ -104,6 +104,7 @@ type CaseFixture = {
     scenario: string;
     sentiment: 'positive' | 'negative';
     quotes_from_user?: string[];
+    aspects?: Array<{ dimension: string; verdict: 'like' | 'dislike'; note: string }>;
 };
 
 function writeCaseMarkdown(vault: string, clientSlug: string, fixture: CaseFixture) {
@@ -122,6 +123,7 @@ function writeCaseMarkdown(vault: string, clientSlug: string, fixture: CaseFixtu
             `scenario: ${fixture.scenario}`,
             `sentiment: ${fixture.sentiment}`,
             `quotes_from_user: ${JSON.stringify(fixture.quotes_from_user ?? [])}`,
+            ...(fixture.aspects ? [`aspects: ${JSON.stringify(fixture.aspects)}`] : []),
             '---',
             ''
         ].join('\n')
@@ -818,6 +820,36 @@ test('GET /api/context client+scenario -> scenario filter + override + never rul
     });
     assert.ok(response.body.cases.every((entry: { scenario: string; sentiment: string }) => entry.scenario === 'landing' && entry.sentiment === 'positive'));
     assert.ok(response.body.antiCases.every((entry: { scenario: string; sentiment: string }) => entry.scenario === 'landing' && entry.sentiment === 'negative'));
+});
+
+test('GET /api/context returns aspects on every case summary', async () => {
+    const vault = setupVault();
+    writeClientMeta(vault, '_personal', { type: 'self' });
+    writeStyleGuide(vault, '# Personal Style Guide\n');
+    const aspects = [
+        { dimension: 'typography', verdict: 'like' as const, note: 'x' },
+        { dimension: 'color', verdict: 'dislike' as const, note: '太冷' }
+    ];
+    writeCaseMarkdown(vault, '_personal', {
+        slug: 'aspectual',
+        scenario: 'landing',
+        sentiment: 'positive',
+        aspects
+    });
+    writeCaseMarkdown(vault, '_personal', {
+        slug: 'legacy',
+        scenario: 'landing',
+        sentiment: 'positive'
+    });
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().get('/api/context').set(authHeaders()).query({ client: '_personal', scenario: 'landing' })
+    );
+
+    assert.equal(response.status, 200);
+    const bySlug = new Map(response.body.cases.map((entry: { slug: string }) => [entry.slug, entry]));
+    assert.deepEqual(bySlug.get('aspectual')?.aspects, aspects);
+    assert.deepEqual(bySlug.get('legacy')?.aspects, []);
 });
 
 test('GET /api/context positive cases are limited to top 5', async () => {
