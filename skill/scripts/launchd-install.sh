@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Usage: launchd-install.sh
 # Install and load the design-lab sidecar LaunchAgent.
+# launchctl mutates real host state; automated coverage is syntax smoke (`bash -n`).
+# Manual UAT: uninstall -> install -> install twice, then verify daemon health.
 set -euo pipefail
 
 LABEL="co.zhenhe.designlab.sidecar"
@@ -27,6 +29,43 @@ sed_escape_replacement() {
 
 render_value() {
     printf '%s' "$1" | xml_escape | sed_escape_replacement
+}
+
+wait_for_bootout() {
+    for _ in $(seq 1 20); do
+        launchctl print "${USER_TARGET}/${LABEL}" >/dev/null 2>&1 || return 0
+        sleep 0.25
+    done
+}
+
+bootstrap_launch_agent() {
+    local bootstrap_err
+    bootstrap_err="$(mktemp "${TMPDIR:-/tmp}/designlab-bootstrap.XXXXXX")"
+
+    for attempt in $(seq 1 5); do
+        if launchctl bootstrap "$USER_TARGET" "$PLIST_PATH" 2>"$bootstrap_err"; then
+            rm -f "$bootstrap_err"
+            return 0
+        fi
+
+        if grep -qi "service already loaded" "$bootstrap_err"; then
+            echo "launchd-install: service already loaded; continuing" >&2
+            rm -f "$bootstrap_err"
+            return 0
+        fi
+
+        cat "$bootstrap_err" >&2
+        if [ "$attempt" -lt 5 ]; then
+            echo "launchd-install: bootstrap failed; retrying ($attempt/5)" >&2
+            sleep 0.5
+            launchctl bootout "${USER_TARGET}/${LABEL}" 2>/dev/null || true
+            wait_for_bootout
+            continue
+        fi
+    done
+
+    rm -f "$bootstrap_err"
+    return 1
 }
 
 NODE_BIN="$(command -v node || true)"
@@ -57,7 +96,8 @@ if command -v plutil > /dev/null 2>&1; then
 fi
 
 launchctl bootout "${USER_TARGET}/${LABEL}" 2>/dev/null || true
-launchctl bootstrap "$USER_TARGET" "$PLIST_PATH"
+wait_for_bootout
+bootstrap_launch_agent
 launchctl enable "${USER_TARGET}/${LABEL}" 2>/dev/null || true
 
 for _ in $(seq 1 30); do
