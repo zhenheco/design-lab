@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>co.zhenhe.designlab.sidecar</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>__SIDECAR_DAEMON_SH__</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>__LOG_DIR__/designlab-sidecar.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__LOG_DIR__/designlab-sidecar.err.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__PATH__</string>
+
+        <key>DESIGN_LAB_VAULT_PATH</key>
+        <string>__DESIGN_LAB_VAULT_PATH__</string>
+    </dict>
+</dict>
+</plist>
