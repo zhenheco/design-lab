@@ -477,6 +477,23 @@ test('POST /api/clients/:slug/style-guide without existing guide writes without 
     assert.equal(readFileSync(join(vault, 'clients', 'newbrand', 'style-guide.md'), 'utf8'), 'first brand guide');
 });
 
+test('POST /api/clients/:slug/style-guide stale expectedHash -> 409', async () => {
+    const vault = setupVault();
+    writeClientMeta(vault, 'whatcanido', { type: 'client' });
+    writeClientStyleGuide(vault, 'whatcanido', 'current brand guide');
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().post('/api/clients/whatcanido/style-guide').set(authHeaders()).send({
+            content: 'new brand guide',
+            expectedHash: 'stale-hash'
+        })
+    );
+
+    assert.equal(response.status, 409);
+    assert.match(response.body.error, /hash conflict/);
+    assert.equal(readFileSync(join(vault, 'clients', 'whatcanido', 'style-guide.md'), 'utf8'), 'current brand guide');
+});
+
 test('GET /api/scenario-overrides -> 200 + array', async () => {
     const vault = setupVault();
     const overridesDir = join(vault, 'scenario-overrides');
