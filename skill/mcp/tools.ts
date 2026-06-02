@@ -19,6 +19,14 @@ export const addCaseInputSchema = {
 
 export type AddCaseArgs = z.infer<z.ZodObject<typeof addCaseInputSchema>>;
 
+export const editStyleGuideInputSchema = {
+    brand: z.string().optional(),
+    content: z.string(),
+    expectedHash: z.string().optional()
+};
+
+export type EditStyleGuideArgs = z.infer<z.ZodObject<typeof editStyleGuideInputSchema>>;
+
 export function buildAddCaseRequest(args: AddCaseArgs): SidecarRequest {
     return {
         method: 'POST',
@@ -31,6 +39,19 @@ export function buildAddCaseRequest(args: AddCaseArgs): SidecarRequest {
             quote: args.quote,
             sourceImagePath: args.sourceImagePath,
             tokens: args.tokens
+        }
+    };
+}
+
+export function buildEditStyleGuideRequest(args: EditStyleGuideArgs): SidecarRequest {
+    return {
+        method: 'POST',
+        path: args.brand
+            ? `/api/clients/${encodeURIComponent(args.brand)}/style-guide`
+            : '/api/style-guide',
+        body: {
+            content: args.content,
+            expectedHash: args.expectedHash
         }
     };
 }
