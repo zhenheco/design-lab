@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { createServer as createNetServer } from 'node:net';
 import {
     chmodSync,
     existsSync,
@@ -18,12 +19,12 @@ import { afterEach, test } from 'node:test';
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const SKILL_DIR = resolve(TEST_DIR, '..', '..');
 const ENSURE_SCRIPT = join(SKILL_DIR, 'scripts', 'ensure-sidecar.sh');
-const HEALTH_URL = 'http://127.0.0.1:5174/api/health';
 
 type Fixture = {
     root: string;
     home: string;
     vault: string;
+    port: number;
     stateDir: string;
     pidFile: string;
     tokenFile: string;
@@ -33,10 +34,35 @@ type Fixture = {
 let currentFixture: Fixture | null = null;
 let extraProcesses: ChildProcess[] = [];
 
-function createFixture(): Fixture {
+async function getEphemeralPort(): Promise<number> {
+    const server = createNetServer();
+    await new Promise<void>((resolvePromise, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => resolvePromise());
+    });
+
+    const address = server.address();
+    assert(address && typeof address === 'object');
+    const port = address.port;
+
+    await new Promise<void>((resolvePromise, reject) => {
+        server.close((error) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+            resolvePromise();
+        });
+    });
+
+    return port;
+}
+
+async function createFixture(): Promise<Fixture> {
     const root = mkdtempSync(join(tmpdir(), 'dl-ensure-test-'));
     const home = join(root, 'home');
     const vault = join(root, 'vault');
+    const port = await getEphemeralPort();
     const stateDir = join(home, '.claude', 'state', 'design-lab');
     mkdirSync(join(vault, 'clients'), { recursive: true });
     mkdirSync(home, { recursive: true });
@@ -45,6 +71,7 @@ function createFixture(): Fixture {
         root,
         home,
         vault,
+        port,
         stateDir,
         pidFile: join(stateDir, 'sidecar.pid'),
         tokenFile: join(stateDir, 'api-token'),
@@ -61,6 +88,7 @@ function runEnsure(fixture: Fixture, timeout = 15_000) {
             ...process.env,
             HOME: fixture.home,
             DESIGN_LAB_VAULT_PATH: fixture.vault,
+            DESIGN_LAB_SIDECAR_PORT: String(fixture.port),
             TMPDIR: fixture.root
         },
         encoding: 'utf8',
@@ -76,6 +104,7 @@ function spawnEnsure(fixture: Fixture): Promise<{ code: number | null; stdout: s
                 ...process.env,
                 HOME: fixture.home,
                 DESIGN_LAB_VAULT_PATH: fixture.vault,
+                DESIGN_LAB_SIDECAR_PORT: String(fixture.port),
                 TMPDIR: fixture.root
             },
             stdio: ['ignore', 'pipe', 'pipe']
@@ -95,11 +124,15 @@ function spawnEnsure(fixture: Fixture): Promise<{ code: number | null; stdout: s
     });
 }
 
-async function waitForHealth(timeoutMs = 10_000): Promise<boolean> {
+function healthUrl(fixture: Fixture): string {
+    return `http://127.0.0.1:${fixture.port}/api/health`;
+}
+
+async function waitForHealth(fixture: Fixture, timeoutMs = 10_000): Promise<boolean> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
         try {
-            const response = await fetch(HEALTH_URL);
+            const response = await fetch(healthUrl(fixture));
             if (response.ok) {
                 return true;
             }
@@ -146,7 +179,7 @@ async function killPid(pid: number | null) {
     }
 }
 
-async function startDummyPortOwner(): Promise<ChildProcess> {
+async function startDummyPortOwner(port: number): Promise<ChildProcess> {
     const child = spawn(
         process.execPath,
         [
@@ -154,7 +187,7 @@ async function startDummyPortOwner(): Promise<ChildProcess> {
             [
                 "const http = require('node:http');",
                 "const server = http.createServer((_req, res) => { res.writeHead(503); res.end('dummy'); });",
-                "server.listen(5174, '127.0.0.1', () => console.log('ready'));",
+                `server.listen(${port}, '127.0.0.1', () => console.log('ready'));`,
                 "process.on('SIGTERM', () => server.close(() => process.exit(0)));"
             ].join('')
         ],
@@ -199,7 +232,7 @@ afterEach(async () => {
 });
 
 test('fresh: spawns sidecar, writes 0600 token, and passes health', async () => {
-    const fixture = createFixture();
+    const fixture = await createFixture();
 
     const result = runEnsure(fixture);
 
@@ -208,11 +241,11 @@ test('fresh: spawns sidecar, writes 0600 token, and passes health', async () => 
     assert.ok(existsSync(fixture.tokenFile), 'token file should exist');
     assert.match(readFileSync(fixture.tokenFile, 'utf8').trim(), /^[a-f0-9]{64}$/);
     assert.equal((statSync(fixture.tokenFile).mode & 0o777).toString(8), '600');
-    assert.equal(await waitForHealth(), true);
+    assert.equal(await waitForHealth(fixture), true);
 });
 
-test('already-running: healthy PID exits quickly without respawn', () => {
-    const fixture = createFixture();
+test('already-running: healthy PID exits quickly without respawn', async () => {
+    const fixture = await createFixture();
     const first = runEnsure(fixture);
     assert.equal(first.status, 0, first.stderr);
     const firstPid = readPid(fixture);
@@ -226,8 +259,8 @@ test('already-running: healthy PID exits quickly without respawn', () => {
     assert.ok(elapsed < 1_000, `expected <1s, got ${elapsed}ms`);
 });
 
-test('stale-pid: removes dead PID and spawns a new sidecar', () => {
-    const fixture = createFixture();
+test('stale-pid: removes dead PID and spawns a new sidecar', async () => {
+    const fixture = await createFixture();
     mkdirSync(fixture.stateDir, { recursive: true });
     writeFileSync(fixture.pidFile, '999999');
 
@@ -239,8 +272,8 @@ test('stale-pid: removes dead PID and spawns a new sidecar', () => {
     assert.notEqual(pid, 999999);
 });
 
-test('stale-lock-recovery: removes dead holder lock and spawns sidecar', () => {
-    const fixture = createFixture();
+test('stale-lock-recovery: removes dead holder lock and spawns sidecar', async () => {
+    const fixture = await createFixture();
     mkdirSync(fixture.lockDir, { recursive: true });
     writeFileSync(join(fixture.lockDir, 'holder'), '999999');
 
@@ -253,8 +286,8 @@ test('stale-lock-recovery: removes dead holder lock and spawns sidecar', () => {
 });
 
 test('port-conflict: exits non-zero with a clear stderr message', async () => {
-    const fixture = createFixture();
-    await startDummyPortOwner();
+    const fixture = await createFixture();
+    await startDummyPortOwner(fixture.port);
 
     const result = runEnsure(fixture, 15_000);
 
@@ -263,12 +296,12 @@ test('port-conflict: exits non-zero with a clear stderr message', async () => {
 });
 
 test('concurrent-race: two callers converge on one healthy sidecar', async () => {
-    const fixture = createFixture();
+    const fixture = await createFixture();
 
     const [first, second] = await Promise.all([spawnEnsure(fixture), spawnEnsure(fixture)]);
 
     assert.equal(first.code, 0, first.stderr);
     assert.equal(second.code, 0, second.stderr);
     assert.ok(readPid(fixture), 'PID file should contain the single sidecar PID');
-    assert.equal(await waitForHealth(), true);
+    assert.equal(await waitForHealth(fixture), true);
 });

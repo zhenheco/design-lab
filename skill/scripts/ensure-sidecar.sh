@@ -7,7 +7,8 @@ STATE_DIR="${HOME}/.claude/state/design-lab"
 PID_FILE="${STATE_DIR}/sidecar.pid"
 TOKEN_FILE="${STATE_DIR}/api-token"
 LOCK_DIR="${STATE_DIR}/spawn.lock"
-HEALTH_URL="http://127.0.0.1:5174/api/health"
+PORT="${DESIGN_LAB_SIDECAR_PORT:-5174}"
+HEALTH_URL="http://127.0.0.1:${PORT}/api/health"
 VAULT="${DESIGN_LAB_VAULT_PATH:-${HOME}/Documents/CC Cli/design-library}"
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_FILE="${TMPDIR:-/tmp}/design-lab-sidecar.log"
@@ -83,7 +84,7 @@ chmod 600 "$TOKEN_FILE"
 DESIGN_LAB_VAULT_PATH="$VAULT" DESIGN_LAB_API_TOKEN="$TOKEN" \
 nohup node --import tsx --input-type=module -e "
 import { startServer } from '$SKILL_DIR/sidecar/server.ts';
-startServer(5174, '127.0.0.1').catch(err => { console.error(err); process.exit(1); });
+startServer(Number(process.env.DESIGN_LAB_SIDECAR_PORT || 5174), '127.0.0.1').catch(err => { console.error(err); process.exit(1); });
 " > "$LOG_FILE" 2>&1 &
 SIDECAR_PID=$!
 echo "$SIDECAR_PID" > "$PID_FILE"
