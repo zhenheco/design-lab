@@ -53,6 +53,10 @@ function isHttpUrl(value: string): boolean {
     }
 }
 
+function shouldAllowPrivateCapture(): boolean {
+    return process.env.DESIGN_LAB_CAPTURE_ALLOW_PRIVATE === '1';
+}
+
 export function captureRouter(): Router {
     const router = Router();
 
@@ -94,7 +98,7 @@ export function captureRouter(): Router {
         }
 
         try {
-            const capture = await captureUrl(url);
+            const capture = await captureUrl(url, { allowPrivate: shouldAllowPrivateCapture() });
             const slug = dedupeSlug(
                 client,
                 typeof req.body.slug === 'string' ? slugify(req.body.slug) : slugify(titleOrHost(capture.title, url))

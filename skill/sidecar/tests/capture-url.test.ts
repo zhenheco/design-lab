@@ -120,6 +120,7 @@ test('POST /api/capture/url captures a fixture URL and writes a design case with
             {
                 DESIGN_LAB_VAULT_PATH: vault,
                 DESIGN_LAB_API_TOKEN: 'test-token-for-capture-url',
+                DESIGN_LAB_CAPTURE_ALLOW_PRIVATE: '1',
                 NODE_ENV: 'test'
             },
             () =>
@@ -149,6 +150,29 @@ test('POST /api/capture/url captures a fixture URL and writes a design case with
     } finally {
         await fixture.close();
     }
+});
+
+test('POST /api/capture/url rejects private hosts before navigation', async () => {
+    const vault = setupVault();
+
+    const response = await withEnv(
+        {
+            DESIGN_LAB_VAULT_PATH: vault,
+            DESIGN_LAB_API_TOKEN: 'test-token-for-capture-url',
+            DESIGN_LAB_CAPTURE_ALLOW_PRIVATE: undefined,
+            NODE_ENV: 'test'
+        },
+        () =>
+            request(createApp()).post('/api/capture/url').set(authHeaders()).send({
+                url: 'http://169.254.169.254/',
+                client: 'whatcanido',
+                scenario: 'landing',
+                quote: 'Private metadata hosts must not be captured.'
+            })
+    );
+
+    assert.equal(response.status, 400);
+    assert.match(response.body.error, /private\/loopback host not allowed/);
 });
 
 test('POST /api/capture/url without token returns 401', async () => {
