@@ -8,14 +8,17 @@ import {
     addFeedbackInputSchema,
     buildAddCaseRequest,
     buildAddFeedbackRequest,
+    buildCaptureUrlRequest,
     buildEditStyleGuideRequest,
     buildGetContextRequest,
     buildListClientsRequest,
+    captureUrlInputSchema,
     editStyleGuideInputSchema,
     getContextInputSchema,
     listClientsInputSchema,
     type AddCaseArgs,
     type AddFeedbackArgs,
+    type CaptureUrlArgs,
     type EditStyleGuideArgs,
     type GetContextArgs,
     type SidecarRequest
@@ -69,6 +72,10 @@ export async function handleListClientsTool(): Promise<ToolResult> {
 
 export async function handleAddCaseTool(args: AddCaseArgs): Promise<ToolResult> {
     return handleSidecarRequest(buildAddCaseRequest(args));
+}
+
+export async function handleCaptureUrlTool(args: CaptureUrlArgs): Promise<ToolResult> {
+    return handleSidecarRequest(buildCaptureUrlRequest(args));
 }
 
 export async function handleAddFeedbackTool(args: AddFeedbackArgs): Promise<ToolResult> {
@@ -125,6 +132,15 @@ export function createMcpServer(): McpServer {
             inputSchema: editStyleGuideInputSchema
         },
         (args) => handleEditStyleGuideTool(args)
+    );
+
+    server.registerTool(
+        'capture_url',
+        {
+            description: 'Paste a URL to screenshot it, extract live computed design tokens, and save it as a design-lab case for the selected brand.',
+            inputSchema: captureUrlInputSchema
+        },
+        (args) => handleCaptureUrlTool(args)
     );
 
     return server;
