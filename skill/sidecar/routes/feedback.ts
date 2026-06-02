@@ -6,7 +6,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function parseBody(body: unknown): FeedbackEntry | null {
+type ParseBodyResult =
+    | { ok: true; entry: FeedbackEntry }
+    | { ok: false; error: 'invalid feedback payload' | 'invalid verdict' };
+
+function parseBody(body: unknown): ParseBodyResult {
     if (
         !isRecord(body) ||
         typeof body.signal !== 'string' ||
@@ -14,12 +18,17 @@ function parseBody(body: unknown): FeedbackEntry | null {
         typeof body.user_quote !== 'string' ||
         body.user_quote.trim().length === 0
     ) {
-        return null;
+        return { ok: false, error: 'invalid feedback payload' };
+    }
+
+    if ('verdict' in body && body.verdict !== 'like' && body.verdict !== 'dislike') {
+        return { ok: false, error: 'invalid verdict' };
     }
 
     const entry: FeedbackEntry = {
         signal: body.signal,
-        user_quote: body.user_quote
+        user_quote: body.user_quote,
+        ...(body.verdict === 'like' || body.verdict === 'dislike' ? { verdict: body.verdict } : {})
     };
 
     for (const field of ['client', 'case_slug', 'dimension', 'derived_rule'] as const) {
@@ -28,20 +37,20 @@ function parseBody(body: unknown): FeedbackEntry | null {
         }
     }
 
-    return entry;
+    return { ok: true, entry };
 }
 
 export function feedbackRouter(): Router {
     const router = Router();
 
     router.post('/', (req, res) => {
-        const body = parseBody(req.body);
-        if (!body) {
-            res.status(400).json({ error: 'invalid feedback payload' });
+        const bodyResult = parseBody(req.body);
+        if (!bodyResult.ok) {
+            res.status(400).json({ error: bodyResult.error });
             return;
         }
 
-        appendFeedback(getVaultPath(), body);
+        appendFeedback(getVaultPath(), bodyResult.entry);
         res.status(201).json({ ok: true });
     });
 

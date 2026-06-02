@@ -442,6 +442,42 @@ test('POST /api/feedback missing signal or user_quote -> 400', async () => {
     assert.equal(missingQuote.status, 400);
 });
 
+test('POST /api/feedback accepts explicit verdict values and appends them', async () => {
+    const vault = setupVault();
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().post('/api/feedback').set(authHeaders()).send({
+            signal: 'I like it',
+            user_quote: 'Keep this direction.',
+            verdict: 'like'
+        })
+    );
+
+    assert.equal(response.status, 201);
+
+    const rows = readFileSync(join(vault, 'feedback-log.jsonl'), 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].verdict, 'like');
+});
+
+test('POST /api/feedback rejects invalid explicit verdict values', async () => {
+    const vault = setupVault();
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().post('/api/feedback').set(authHeaders()).send({
+            signal: 'unclear',
+            user_quote: 'Not sure about this.',
+            verdict: 'bad'
+        })
+    );
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(response.body, { error: 'invalid verdict' });
+});
+
 test('POST /api/feedback without token -> 401', async () => {
     const vault = setupVault();
 

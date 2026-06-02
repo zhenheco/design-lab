@@ -96,7 +96,7 @@ export function aggregateDistill(input: AggregateInput): DistillResult {
             continue;
         }
 
-        const verdict = verdictFromSignal(entry.signal);
+        const verdict = entry.verdict ?? verdictFromSignal(entry.signal);
         if (!verdict) {
             continue;
         }

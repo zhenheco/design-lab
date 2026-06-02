@@ -81,6 +81,50 @@ test('aggregateDistill counts feedback with dimension and verdict-like signal', 
     ]);
 });
 
+test('aggregateDistill lets explicit feedback verdict override signal keywords', () => {
+    const result = aggregateDistill({
+        brand: 'whatcanido',
+        minSupport: 1,
+        cases: [],
+        feedback: [
+            feedback({ dimension: 'color', verdict: 'dislike', signal: 'I like it', user_quote: 'x' })
+        ]
+    });
+
+    assert.deepEqual(result.clusters, [
+        {
+            dimension: 'color',
+            verdict: 'dislike',
+            count: 1,
+            caseSlugs: [],
+            feedbackQuotes: ['x'],
+            notes: ['x']
+        }
+    ]);
+});
+
+test('aggregateDistill keeps keyword fallback when feedback verdict is omitted', () => {
+    const result = aggregateDistill({
+        brand: 'whatcanido',
+        minSupport: 1,
+        cases: [],
+        feedback: [
+            feedback({ dimension: 'color', signal: 'dislike cold palette', user_quote: '不要冷藍' })
+        ]
+    });
+
+    assert.deepEqual(result.clusters, [
+        {
+            dimension: 'color',
+            verdict: 'dislike',
+            count: 1,
+            caseSlugs: [],
+            feedbackQuotes: ['不要冷藍'],
+            notes: ['不要冷藍']
+        }
+    ]);
+});
+
 test('aggregateDistill defaults minSupport to 2 and sorts clusters deterministically', () => {
     const result = aggregateDistill({
         brand: 'whatcanido',

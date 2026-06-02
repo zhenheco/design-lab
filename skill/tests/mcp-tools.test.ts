@@ -7,6 +7,8 @@ import {
     buildCaptureUrlRequest,
     buildDistillTasteRequest,
     buildEditStyleGuideRequest,
+    buildAddFeedbackRequest,
+    addFeedbackInputSchema,
     captureUrlInputSchema,
     distillTasteInputSchema
 } from '../mcp/tools.ts';
@@ -132,5 +134,30 @@ test('MCP distill_taste mapper leaves minSupport undefined when omitted', () => 
         method: 'GET',
         path: '/api/distill/whatcanido',
         query: { minSupport: undefined }
+    });
+});
+
+test('MCP add_feedback mapper posts explicit verdict when provided', () => {
+    const args = z.object(addFeedbackInputSchema).parse({
+        signal: 'I like it',
+        user_quote: 'Keep this direction.',
+        client: 'whatcanido',
+        dimension: 'color',
+        verdict: 'like'
+    });
+    const request = buildAddFeedbackRequest(args);
+
+    assert.deepEqual(request, {
+        method: 'POST',
+        path: '/api/feedback',
+        body: {
+            signal: 'I like it',
+            user_quote: 'Keep this direction.',
+            client: 'whatcanido',
+            case_slug: undefined,
+            dimension: 'color',
+            derived_rule: undefined,
+            verdict: 'like'
+        }
     });
 });

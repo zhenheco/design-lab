@@ -1,6 +1,7 @@
 export interface FeedbackEntry {
     signal: string;
     user_quote: string;
+    verdict?: 'like' | 'dislike';
     client?: string;
     case_slug?: string;
     dimension?: string;

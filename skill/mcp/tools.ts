@@ -57,6 +57,7 @@ export type DistillTasteArgs = z.infer<z.ZodObject<typeof distillTasteInputSchem
 export const addFeedbackInputSchema = {
     signal: z.string(),
     user_quote: z.string(),
+    verdict: z.enum(['like', 'dislike']).optional(),
     client: z.string().optional(),
     case_slug: z.string().optional(),
     dimension: z.string().optional(),
@@ -133,6 +134,7 @@ export function buildAddFeedbackRequest(args: AddFeedbackArgs): SidecarRequest {
         body: {
             signal: args.signal,
             user_quote: args.user_quote,
+            verdict: args.verdict,
             client: args.client,
             case_slug: args.case_slug,
             dimension: args.dimension,
