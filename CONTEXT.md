@@ -15,8 +15,11 @@ A distinct visual identity the memory is scoped to. Modeled in code as a **Clien
 _Avoid_: client (in conversation), account, tenant, project
 
 **Case**:
-One captured design you liked — stored as **Design Tokens** + a **Quote** + **Tags**, scoped to a **Scenario** and a **Brand**. `sentiment: positive`.
+One captured design reference — **Design Tokens** + a **Quote** + **Tags** + **Aspects**, scoped to a **Scenario** and a **Brand**. Carries an overall `sentiment` plus per-dimension **Aspects** for mixed verdicts ("typography good, colour bad").
 _Avoid_: example, sample, reference
+
+**Aspect**:
+A per-dimension verdict on a Case — `{ dimension (typography|color|layout|motion|spacing|content|…), verdict: like|dislike, note }`. Lets one reference be partly emulated, partly avoided (ADR-0004). Dimension vocabulary shared with **Feedback**.
 
 **Anti-case**:
 A captured design you disliked — a negative signal in the brand's `anti-library/`. `sentiment: negative`.
@@ -44,7 +47,7 @@ _Avoid_: tokens (unqualified), styles
 ### Flow
 
 **Capture**:
-Turning a source you liked into a **Case** via vision token extraction. Has four **Adapters**, all funnelling into one ingest pipeline.
+Turning a reviewed design source into a **Case**. Primary source: the **daily Hermes search cron** surfaces candidates, you give a per-aspect verdict, Hermes imports via `capture_url` (Playwright screenshot + computed-style **Design Tokens**) + **Aspects**. (Capture = input side; generation = output side via `/design`.)
 _Avoid_: collect, import
 
 **Adapter**:
@@ -86,6 +89,9 @@ The `design-memory-bridge` skill inside the **open-design** fork that optionally
 A separate, heavyweight design-generation studio (forked from `nexu-io/open-design`). Optional; not in the daily loop.
 _Avoid_: "the generator", "the other folder"
 
+**`/design`**:
+The Claude Code command that loads a **Brand**'s merged memory (Style Guides + Cases + **Aspects** + NEVER rules) to generate a frontend in the accumulated taste — the **output/use side** of the loop (capture/input side = **ace hermes**).
+
 ## Relationships
 
 - A **Vault** holds many **Brands**; exactly one is the self-brand (`_personal`).
@@ -96,6 +102,7 @@ _Avoid_: "the generator", "the other folder"
 - **ace hermes** reads **Context** and writes **Cases** through the **MCP server** (read + write).
 - **open-design** optionally reads **Context** through the **Bridge** (read only).
 - **Retrieval scope**: a `type:client` **Brand** returns its own Cases + all self-brand Cases; the self-brand returns self only — baseline taste flows into every brand, brand-specific cases never leak across brands.
+- **Input/output loop**: **ace hermes** is the *input* side — its daily search cron surfaces candidates, you give per-**Aspect** verdicts, it captures into the **Vault**. Claude Code **`/design`** is the *output* side — it loads the **Brand**'s merged memory to generate frontends in the accumulated taste. Both read the same **Sidecar**; **open-design** is an optional third consumer.
 
 ## Example dialogue
 
