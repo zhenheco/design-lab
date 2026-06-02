@@ -1,17 +1,30 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAddCaseRequest, buildCaptureUrlRequest, buildEditStyleGuideRequest } from '../mcp/tools.ts';
+import { z } from 'zod';
+import {
+    addCaseInputSchema,
+    buildAddCaseRequest,
+    buildCaptureUrlRequest,
+    buildEditStyleGuideRequest,
+    captureUrlInputSchema
+} from '../mcp/tools.ts';
 
 test('MCP add_case mapper posts the full case body with sourceImagePath as a path string', () => {
-    const request = buildAddCaseRequest({
+    const aspects = [
+        { dimension: 'typography', verdict: 'like' as const, note: 'x' },
+        { dimension: 'color', verdict: 'dislike' as const, note: '太冷' }
+    ];
+    const args = z.object(addCaseInputSchema).parse({
         client: 'whatcanido',
         slug: 'hero-contrast',
         sentiment: 'positive',
         scenario: 'landing',
         quote: '留白乾淨，重點明確',
         sourceImagePath: '/Users/avyhsu/Desktop/reference.png',
-        tokens: { palette: ['ink', 'rice-paper'] }
+        tokens: { palette: ['ink', 'rice-paper'] },
+        aspects
     });
+    const request = buildAddCaseRequest(args);
 
     assert.deepEqual(request, {
         method: 'POST',
@@ -23,7 +36,8 @@ test('MCP add_case mapper posts the full case body with sourceImagePath as a pat
             scenario: 'landing',
             quote: '留白乾淨，重點明確',
             sourceImagePath: '/Users/avyhsu/Desktop/reference.png',
-            tokens: { palette: ['ink', 'rice-paper'] }
+            tokens: { palette: ['ink', 'rice-paper'] },
+            aspects
         }
     });
 });
@@ -62,14 +76,20 @@ test('MCP edit_style_guide mapper targets global style guide when brand is omitt
 });
 
 test('MCP capture_url mapper posts URL capture requests to the sidecar', () => {
-    const request = buildCaptureUrlRequest({
+    const aspects = [
+        { dimension: 'typography', verdict: 'like' as const, note: 'x' },
+        { dimension: 'color', verdict: 'dislike' as const, note: '太冷' }
+    ];
+    const args = z.object(captureUrlInputSchema).parse({
         url: 'https://example.com',
         client: 'whatcanido',
         scenario: 'landing',
         quote: 'Hero typography is focused and calm.',
         sentiment: 'positive',
-        slug: 'example-home'
+        slug: 'example-home',
+        aspects
     });
+    const request = buildCaptureUrlRequest(args);
 
     assert.deepEqual(request, {
         method: 'POST',
@@ -80,7 +100,8 @@ test('MCP capture_url mapper posts URL capture requests to the sidecar', () => {
             scenario: 'landing',
             quote: 'Hero typography is focused and calm.',
             sentiment: 'positive',
-            slug: 'example-home'
+            slug: 'example-home',
+            aspects
         }
     });
 });

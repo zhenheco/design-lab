@@ -7,6 +7,12 @@ export type SidecarRequest = {
     body?: unknown;
 };
 
+const aspectInputSchema = z.object({
+    dimension: z.string(),
+    verdict: z.enum(['like', 'dislike']),
+    note: z.string()
+});
+
 export const addCaseInputSchema = {
     client: z.string(),
     slug: z.string(),
@@ -14,7 +20,8 @@ export const addCaseInputSchema = {
     scenario: z.enum(['landing', 'saas-ui', 'brand', 'content']),
     quote: z.string(),
     sourceImagePath: z.string(),
-    tokens: z.unknown().optional()
+    tokens: z.unknown().optional(),
+    aspects: z.array(aspectInputSchema).optional()
 };
 
 export type AddCaseArgs = z.infer<z.ZodObject<typeof addCaseInputSchema>>;
@@ -25,7 +32,8 @@ export const captureUrlInputSchema = {
     scenario: z.enum(['landing', 'saas-ui', 'brand', 'content']),
     quote: z.string(),
     sentiment: z.enum(['positive', 'negative']).optional(),
-    slug: z.string().optional()
+    slug: z.string().optional(),
+    aspects: z.array(aspectInputSchema).optional()
 };
 
 export type CaptureUrlArgs = z.infer<z.ZodObject<typeof captureUrlInputSchema>>;
@@ -69,7 +77,8 @@ export function buildAddCaseRequest(args: AddCaseArgs): SidecarRequest {
             scenario: args.scenario,
             quote: args.quote,
             sourceImagePath: args.sourceImagePath,
-            tokens: args.tokens
+            tokens: args.tokens,
+            aspects: args.aspects
         }
     };
 }
