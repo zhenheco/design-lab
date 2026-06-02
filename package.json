@@ -6,7 +6,7 @@
   "scripts": {
     "test": "node --test --import tsx \"skill/tests/**/*.test.{js,ts}\" \"skill/sidecar/tests/**/*.test.ts\" \"skill/scripts/tests/**/*.test.ts\"",
     "test:dashboard": "cd skill/dashboard && npm test",
-    "test:e2e": "cd skill/dashboard && npm run test:e2e",
+    "test:e2e": "node --test --import tsx \"skill/tests/dashboard-e2e.test.js\"",
     "deploy": "bash deploy.sh"
   },
   "dependencies": {
