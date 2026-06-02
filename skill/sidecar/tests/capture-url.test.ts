@@ -175,6 +175,40 @@ test('POST /api/capture/url rejects private hosts before navigation', async () =
     assert.match(response.body.error, /private\/loopback host not allowed/);
 });
 
+test('POST /api/capture/url returns 500 when captured screenshot path is outside the source allowlist', { timeout: 30_000 }, async () => {
+    const vault = setupVault();
+    const disallowedAllowlist = mkdtempSync(join(tmpdir(), 'dl-sidecar-capture-allowlist-'));
+    const fixture = await serveHtml(`<!doctype html>
+        <html>
+            <head><title>Disallowed Screenshot Path</title></head>
+            <body><h1>Disallowed Screenshot Path</h1></body>
+        </html>`);
+
+    try {
+        const response = await withEnv(
+            {
+                DESIGN_LAB_VAULT_PATH: vault,
+                DESIGN_LAB_API_TOKEN: 'test-token-for-capture-url',
+                DESIGN_LAB_CAPTURE_ALLOW_PRIVATE: '1',
+                DESIGN_LAB_SOURCE_ALLOWLIST: disallowedAllowlist,
+                NODE_ENV: 'test'
+            },
+            () =>
+                request(createApp()).post('/api/capture/url').set(authHeaders()).send({
+                    url: fixture.url,
+                    client: 'whatcanido',
+                    scenario: 'landing',
+                    quote: 'Unexpected screenshot paths should not become case sources.'
+                })
+        );
+
+        assert.equal(response.status, 500);
+        assert.deepEqual(response.body, { error: 'internal server error' });
+    } finally {
+        await fixture.close();
+    }
+});
+
 test('POST /api/capture/url without token returns 401', async () => {
     const vault = setupVault();
 

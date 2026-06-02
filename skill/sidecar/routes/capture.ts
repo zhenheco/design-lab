@@ -4,6 +4,7 @@ import { CaptureUrlError, captureUrl } from '../../lib/capture/url-capture.ts';
 import { writeCase } from '../../lib/case-writer.ts';
 import { loadClient } from '../../lib/client-loader.ts';
 import { getAntiCasePath, getCasePath } from '../../lib/paths.ts';
+import { isAllowedSourceImagePath } from './source-image-allowlist.ts';
 
 type Scenario = 'landing' | 'saas-ui' | 'brand' | 'content';
 type Sentiment = 'positive' | 'negative';
@@ -99,6 +100,10 @@ export function captureRouter(): Router {
 
         try {
             const capture = await captureUrl(url, { allowPrivate: shouldAllowPrivateCapture() });
+            if (!isAllowedSourceImagePath(capture.imagePath)) {
+                throw new Error(`captured image path not allowed: ${capture.imagePath}`);
+            }
+
             const slug = dedupeSlug(
                 client,
                 typeof req.body.slug === 'string' ? slugify(req.body.slug) : slugify(titleOrHost(capture.title, url))

@@ -1,35 +1,8 @@
-import { homedir, tmpdir } from 'node:os';
-import { resolve as resolvePath, sep } from 'node:path';
 import { Router, type Request } from 'express';
 import { loadCaseSummaries, type CaseSummary } from '../../lib/case-loader.ts';
 import { getVaultPath } from '../../lib/paths.ts';
 import { writeCase, type WriteCaseInput } from '../../lib/case-writer.ts';
-
-function getSourceAllowlist(): string[] {
-    const home = process.env.HOME ?? homedir();
-    const configured =
-        process.env.DESIGN_LAB_SOURCE_ALLOWLIST
-        ?? `${tmpdir()}:${home}/Pictures/Screenshots:${home}/Downloads`;
-
-    return configured
-        .split(':')
-        .map((prefix) => prefix.trim())
-        .filter((prefix) => prefix.length > 0)
-        .map((prefix) => resolvePath(prefix));
-}
-
-function pathHasTraversal(path: string): boolean {
-    return path.split(/[\\/]+/).includes('..');
-}
-
-function isAllowedSourceImagePath(path: string): boolean {
-    if (pathHasTraversal(path)) {
-        return false;
-    }
-
-    const resolved = resolvePath(path);
-    return getSourceAllowlist().some((prefix) => resolved === prefix || resolved.startsWith(`${prefix}${sep}`));
-}
+import { isAllowedSourceImagePath } from './source-image-allowlist.ts';
 
 type CasesQuery = {
     client?: string;
