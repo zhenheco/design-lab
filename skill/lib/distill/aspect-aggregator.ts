@@ -56,6 +56,28 @@ function getOrCreateCluster(
     return created;
 }
 
+function verdictFromSignal(signal: string): 'like' | 'dislike' | null {
+    const normalized = signal.toLowerCase();
+    if (
+        normalized.includes('dislike') ||
+        normalized.includes('negative') ||
+        normalized.includes('avoid') ||
+        normalized.includes('bad')
+    ) {
+        return 'dislike';
+    }
+    if (
+        normalized.includes('like') ||
+        normalized.includes('positive') ||
+        normalized.includes('good') ||
+        normalized.includes('prefer')
+    ) {
+        return 'like';
+    }
+
+    return null;
+}
+
 export function aggregateDistill(input: AggregateInput): DistillResult {
     const minSupport = input.minSupport ?? 2;
     const drafts = new Map<string, ClusterDraft>();
@@ -66,6 +88,22 @@ export function aggregateDistill(input: AggregateInput): DistillResult {
             cluster.caseSlugs = pushUnique(cluster.caseSlugs, designCase.slug);
             cluster.notes = pushUnique(cluster.notes, aspect.note);
         }
+    }
+
+    for (const entry of input.feedback) {
+        const dimension = typeof entry.dimension === 'string' ? entry.dimension.trim() : '';
+        if (!dimension) {
+            continue;
+        }
+
+        const verdict = verdictFromSignal(entry.signal);
+        if (!verdict) {
+            continue;
+        }
+
+        const cluster = getOrCreateCluster(drafts, dimension, verdict);
+        cluster.feedbackQuotes = pushUnique(cluster.feedbackQuotes, entry.user_quote);
+        cluster.notes = pushUnique(cluster.notes, entry.user_quote);
     }
 
     const clusters = Array.from(drafts.values())
