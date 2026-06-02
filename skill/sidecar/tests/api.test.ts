@@ -1,4 +1,4 @@
-import { mock, test } from 'node:test';
+import { mock, test as nodeTest, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
@@ -10,6 +10,16 @@ import { createApp, errorHandler } from '../server.ts';
 import { authHeaders } from './helpers/auth-headers.ts';
 
 process.env.DESIGN_LAB_API_TOKEN = 'test-token-for-supertest';
+
+let previousApiTest: Promise<unknown> = Promise.resolve();
+
+function test(name: string, fn: (context: TestContext) => Promise<void> | void): void {
+    nodeTest(name, async (context) => {
+        const run = previousApiTest.then(() => fn(context));
+        previousApiTest = run.catch(() => undefined);
+        await run;
+    });
+}
 
 function setupVault() {
     const vault = mkdtempSync(join(tmpdir(), 'dl-sidecar-api-ts-'));
