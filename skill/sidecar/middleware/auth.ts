@@ -33,6 +33,10 @@ function hasHostAllowlistOverride(): boolean {
 }
 
 function isLoopbackHost(host: string): boolean {
+    if (host.includes('@')) {
+        return false;
+    }
+
     try {
         const hostname = new URL(`http://${host}`).hostname.toLowerCase().replace(/^\[|\]$/g, '');
         return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '::1';

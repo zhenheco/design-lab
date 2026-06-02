@@ -98,6 +98,15 @@ test('GET /api/clients allows loopback Host on arbitrary ports', async () => {
     });
 });
 
+test('GET /api/clients rejects Host userinfo before loopback hostname', async () => {
+    await withTestEnv(async () => {
+        for (const host of ['evil.com@127.0.0.1:5174', 'user:pass@127.0.0.1:5174']) {
+            const response = await createAgent().get('/api/clients').set('Host', host);
+            assert.equal(response.status, 403, host);
+        }
+    });
+});
+
 test('GET /api/clients with forbidden Host and no token -> 403', async () => {
     const response = await withTestEnv(() =>
         createAgent().get('/api/clients').set('Host', 'evil.com:5174')
