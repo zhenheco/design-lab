@@ -414,6 +414,7 @@ test('GET /api/context without query -> 200 + full union payload', async () => {
     assert.equal(response.status, 200);
     assert.deepEqual(Object.keys(response.body).sort(), [
         'antiCases',
+        'brandStyleGuide',
         'cases',
         'client',
         'neverRules',
@@ -422,7 +423,12 @@ test('GET /api/context without query -> 200 + full union payload', async () => {
         'styleGuide'
     ]);
     assert.equal(response.body.client, null);
+    assert.equal(response.body.brandStyleGuide, '');
     assert.equal(response.body.scenarioOverride, '');
+    assert.deepEqual(
+        response.body.neverRules.map((rule: { id: string }) => rule.id),
+        ['no-hard-black']
+    );
     assert.deepEqual(response.body.retrievedFrom, ['_personal', 'aicycle', 'zhenheco']);
     assert.deepEqual(summarizeResponseClients(response.body), ['_personal', 'aicycle', 'zhenheco']);
 });
@@ -437,6 +443,7 @@ test('GET /api/context?client=aicycle -> target client meta + self union scope',
 
     assert.equal(response.status, 200);
     assert.equal(response.body.client.slug, 'aicycle');
+    assert.equal(response.body.brandStyleGuide, '');
     assert.deepEqual(response.body.retrievedFrom, ['_personal', 'aicycle', 'zhenheco']);
     assert.deepEqual(summarizeResponseClients(response.body), ['_personal', 'aicycle', 'zhenheco']);
 });
