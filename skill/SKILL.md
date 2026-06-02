@@ -162,6 +162,8 @@ Stale PID 會自動 self-heal（清 PID file 後可重啟）。
 
 ## Bridge to Open Design
 
+> 架構更新（2026-06）：日常設計迴圈改走 **ace hermes 本機端**，經一個包 sidecar 的 **MCP server** 讀 context + 寫 capture（見 `docs/adr/0002`）。open-design 退為**選用**重型生成 studio，本段 bridge 仍有效但非日常主路徑；兩 repo 不合併（見 `docs/adr/0001`）。設計域術語見根目錄 `CONTEXT.md`，完整 v0.4 願景見 `docs/superpowers/specs/2026-06-02-design-lab-v0.4-hermes-capture.md`。
+
 Sidecar 提供 `/api/context?client=X&scenario=Y` 讓 open-design fork 內 `design-memory-bridge` skill 在 generation pre-flight 抓 context：
 
 ```bash
@@ -184,7 +186,7 @@ Response shape：
 }
 ```
 
-Bridge skill 把 `styleGuide` + `scenarioOverride` 注入 system prompt、把 `cases` 當參考、`antiCases` 提示 NEVER。用戶寫 open-design fork bridge 時必須按 v0.3 spec §3.4 bridge contract + §4.1 `design-memory-bridge` SKILL.md template：
+Bridge contract（理想注入）：把 `styleGuide` + `scenarioOverride` 注入 system prompt、`cases` 當參考、`antiCases` 提示 NEVER。**現況**：open-design fork 內 `design-memory-bridge` skill（commit `101f2d3`）目前把整包 `/api/context` JSON 直接 `JSON.stringify` 進 prompt（盲轉，未做上述語意框定），保真度提升列 backlog。任一 bridge consumer 必須按 v0.3 spec §3.4 bridge contract + §4.1 `design-memory-bridge` SKILL.md template：
 - 從 `$HOME/.claude/state/design-lab/api-token` 讀 token。
 - `GET /api/context` 帶 `X-Design-Lab-Token`。
 - 401 時重新讀 token 並 retry 一次。
@@ -250,6 +252,6 @@ npx playwright test
 ## v0.3 已知限制 / v0.4 backlog
 
 - E2E specs 部分 selector 待修（不擋 phase tag）
-- bridge skill 在 open-design fork 待寫（用戶手動補）
+- bridge skill 已寫於 open-design fork（commit `101f2d3`）；現為盲轉 JSON、語意注入保真度待提升。日常主消費者改為 ace hermes 經 MCP server（見 `docs/adr/0002`）
 - v0.4：Global Search FTS5、Feedback log UI、自動 distill、LLM NEVER detector、URL 截圖
 - v0.4+：SaaS 化（multi-tenant、auth、cloud sidecar）
