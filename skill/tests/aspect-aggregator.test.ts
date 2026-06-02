@@ -80,3 +80,31 @@ test('aggregateDistill counts feedback with dimension and verdict-like signal', 
         }
     ]);
 });
+
+test('aggregateDistill defaults minSupport to 2 and sorts clusters deterministically', () => {
+    const result = aggregateDistill({
+        brand: 'whatcanido',
+        cases: [
+            caseSummary('color-bad-1', [{ dimension: 'color', verdict: 'dislike', note: 'Cold.' }]),
+            caseSummary('color-bad-2', [{ dimension: 'color', verdict: 'dislike', note: 'Blue.' }]),
+            caseSummary('type-bad-1', [{ dimension: 'typography', verdict: 'dislike', note: 'Loud.' }]),
+            caseSummary('type-bad-2', [{ dimension: 'typography', verdict: 'dislike', note: 'Heavy.' }]),
+            caseSummary('motion-good-1', [{ dimension: 'motion', verdict: 'like', note: 'Subtle.' }])
+        ],
+        feedback: [
+            feedback({ dimension: 'spacing', signal: 'positive', user_quote: 'Airy rhythm' }),
+            feedback({ dimension: 'spacing', signal: 'good', user_quote: 'Breathing room' }),
+            feedback({ dimension: 'color', signal: 'avoid', user_quote: 'No icy cyan' })
+        ]
+    });
+
+    assert.equal(result.minSupport, 2);
+    assert.deepEqual(
+        result.clusters.map((cluster) => `${cluster.dimension}:${cluster.verdict}:${cluster.count}`),
+        [
+            'color:dislike:3',
+            'spacing:like:2',
+            'typography:dislike:2'
+        ]
+    );
+});
