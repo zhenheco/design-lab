@@ -11,6 +11,11 @@ export type CaptureUrlResult = {
     title: string;
 };
 
+export type CaptureUrlOptions = {
+    outDir?: string;
+    allowPrivate?: boolean;
+};
+
 export class CaptureUrlError extends Error {
     constructor(
         message: string,
@@ -87,7 +92,7 @@ export function isPrivateOrLoopbackHost(hostname: string): boolean {
     return false;
 }
 
-function parseHttpUrl(url: string): URL {
+function parseHttpUrl(url: string, opts: Pick<CaptureUrlOptions, 'allowPrivate'> = {}): URL {
     let parsed: URL;
     try {
         parsed = new URL(url);
@@ -97,6 +102,10 @@ function parseHttpUrl(url: string): URL {
 
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
         throw new CaptureUrlError('capture URL must use http or https', 'invalid_url');
+    }
+
+    if (!opts.allowPrivate && isPrivateOrLoopbackHost(parsed.hostname)) {
+        throw new CaptureUrlError('private/loopback host not allowed', 'invalid_url');
     }
 
     return parsed;
@@ -122,8 +131,8 @@ function normalizeError(error: unknown): Error {
     return error instanceof Error ? error : new Error(String(error));
 }
 
-export async function captureUrl(url: string, opts: { outDir?: string } = {}): Promise<CaptureUrlResult> {
-    const parsedUrl = parseHttpUrl(url);
+export async function captureUrl(url: string, opts: CaptureUrlOptions = {}): Promise<CaptureUrlResult> {
+    const parsedUrl = parseHttpUrl(url, { allowPrivate: opts.allowPrivate });
     const outDir = opts.outDir ?? tmpdir();
     await mkdir(outDir, { recursive: true });
 

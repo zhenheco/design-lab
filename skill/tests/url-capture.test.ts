@@ -4,7 +4,7 @@ import { mkdtemp, stat } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { captureUrl, isPrivateOrLoopbackHost } from '../lib/capture/url-capture.ts';
+import { CaptureUrlError, captureUrl, isPrivateOrLoopbackHost } from '../lib/capture/url-capture.ts';
 
 async function serveHtml(html: string): Promise<{ url: string; close: () => Promise<void> }> {
     const server = createServer((_req, res) => {
@@ -74,7 +74,7 @@ test('captureUrl screenshots a local HTML fixture and extracts computed design t
     const outDir = await mkdtemp(join(tmpdir(), 'design-lab-url-capture-'));
 
     try {
-        const result = await captureUrl(fixture.url, { outDir });
+        const result = await captureUrl(fixture.url, { outDir, allowPrivate: true });
         const imageStat = await stat(result.imagePath);
 
         assert.equal(result.title, 'Rice Paper Fixture');
@@ -99,5 +99,28 @@ test('isPrivateOrLoopbackHost identifies localhost and private address literals'
 
     for (const host of ['example.com', '8.8.8.8', '172.32.0.1']) {
         assert.equal(isPrivateOrLoopbackHost(host), false, `${host} should be public`);
+    }
+});
+
+test('captureUrl blocks private hosts by default and allows them when explicitly enabled', { timeout: 30_000 }, async () => {
+    const fixture = await serveHtml(`<!doctype html>
+        <html>
+            <head><title>Private Fixture</title></head>
+            <body><h1>Private Fixture</h1></body>
+        </html>`);
+
+    try {
+        await assert.rejects(
+            () => captureUrl(fixture.url),
+            (error: unknown) =>
+                error instanceof CaptureUrlError &&
+                error.code === 'invalid_url' &&
+                error.message === 'private/loopback host not allowed'
+        );
+
+        const result = await captureUrl(fixture.url, { allowPrivate: true });
+        assert.equal(result.title, 'Private Fixture');
+    } finally {
+        await fixture.close();
     }
 });
