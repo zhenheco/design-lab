@@ -10,6 +10,8 @@ if [ ! -d "$SKILL_SRC" ]; then
     exit 1
 fi
 
+mkdir -p "$(dirname "$SKILL_DST")"
+
 # 移除舊 symlink/dir
 if [ -L "$SKILL_DST" ]; then
     rm "$SKILL_DST"
