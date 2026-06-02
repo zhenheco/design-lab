@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import express from 'express';
 import matter from 'gray-matter';
 import request from 'supertest';
+import { MAX_CONTEXT_FILE_BYTES } from '../routes/context.ts';
 import { createApp, errorHandler } from '../server.ts';
 import { authHeaders } from './helpers/auth-headers.ts';
 
@@ -710,6 +711,44 @@ test('GET /api/context?client=whatcanido -> includes per-brand brandStyleGuide a
     assert.equal(response.status, 200);
     assert.equal(response.body.styleGuide, globalStyleGuide);
     assert.equal(response.body.brandStyleGuide, brandStyleGuide);
+});
+
+test('GET /api/context preserves small optional file contents exactly', async () => {
+    const vault = setupVault();
+    const styleGuide = '# Personal Style Guide\n\nSmall content.\n';
+    writeStyleGuide(vault, styleGuide);
+
+    const response = await withVaultEnv(vault, () => createAgent().get('/api/context').set(authHeaders()));
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.styleGuide, styleGuide);
+});
+
+test('GET /api/context truncates optional files over the context cap without reading beyond the prefix', async () => {
+    const vault = setupVault();
+    const prefix = 'a'.repeat(MAX_CONTEXT_FILE_BYTES);
+    const overflow = 'b'.repeat(1024);
+    writeStyleGuide(vault, `${prefix}${overflow}`);
+
+    const response = await withVaultEnv(vault, () => createAgent().get('/api/context').set(authHeaders()));
+    const marker = '\n\n<!-- truncated: exceeds 256KB cap -->';
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.styleGuide.startsWith(prefix), true);
+    assert.equal(response.body.styleGuide.includes(marker), true);
+    assert.equal(response.body.styleGuide.length <= MAX_CONTEXT_FILE_BYTES + marker.length, true);
+});
+
+test('GET /api/context returns empty string for missing optional files', async () => {
+    const vault = setupVault();
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().get('/api/context').set(authHeaders()).query({ scenario: 'missing-scenario' })
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.styleGuide, '');
+    assert.equal(response.body.scenarioOverride, '');
 });
 
 test('GET /api/context?client=whatcanido -> merges global and per-brand NEVER rules with global priority', async () => {

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { closeSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
 import { Router, type Request } from 'express';
 import { loadCaseSummaries, type CaseSummary } from '../../lib/case-loader.ts';
 import { loadClient, type ClientMeta } from '../../lib/client-loader.ts';
@@ -6,6 +6,9 @@ import { parseRulesFromGuide, type NeverRule } from '../../lib/lint.js';
 import { getClientStyleGuidePath, getScenarioOverridePath, getStyleGuidePath, getVaultPath } from '../../lib/paths.ts';
 
 const TOP_N_POSITIVE = 5;
+export const MAX_CONTEXT_FILE_BYTES = 256 * 1024;
+
+const CONTEXT_TRUNCATION_MARKER = '\n\n<!-- truncated: exceeds 256KB cap -->';
 
 type ContextQuery = {
     client?: string;
@@ -24,7 +27,25 @@ export interface ContextResponse {
 }
 
 function readOptionalFile(path: string): string {
-    return existsSync(path) ? readFileSync(path, 'utf8') : '';
+    let size: number;
+    try {
+        size = statSync(path).size;
+    } catch {
+        return '';
+    }
+
+    if (size <= MAX_CONTEXT_FILE_BYTES) {
+        return readFileSync(path, 'utf8');
+    }
+
+    const buffer = Buffer.alloc(MAX_CONTEXT_FILE_BYTES);
+    const fd = openSync(path, 'r');
+    try {
+        const bytesRead = readSync(fd, buffer, 0, MAX_CONTEXT_FILE_BYTES, 0);
+        return `${buffer.subarray(0, bytesRead).toString('utf8')}${CONTEXT_TRUNCATION_MARKER}`;
+    } finally {
+        closeSync(fd);
+    }
 }
 
 export function contextRouter(): Router {
