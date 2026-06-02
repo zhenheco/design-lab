@@ -372,6 +372,22 @@ test('POST /api/feedback missing signal or user_quote -> 400', async () => {
     assert.equal(missingQuote.status, 400);
 });
 
+test('POST /api/feedback without token -> 401', async () => {
+    const vault = setupVault();
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent()
+            .post('/api/feedback')
+            .set('Host', '127.0.0.1:5174')
+            .send({
+                signal: 'too-muted',
+                user_quote: 'This screen needs more visual contrast.'
+            })
+    );
+
+    assert.equal(response.status, 401);
+});
+
 test('GET /api/style-guide existing -> 200 + content + contentHash', async () => {
     const vault = setupVault();
     writeFileSync(join(vault, 'personal-style-guide.md'), '# Voice\n\nKeep it sharp.\n');
