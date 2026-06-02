@@ -494,6 +494,25 @@ test('POST /api/clients/:slug/style-guide stale expectedHash -> 409', async () =
     assert.equal(readFileSync(join(vault, 'clients', 'whatcanido', 'style-guide.md'), 'utf8'), 'current brand guide');
 });
 
+test('POST /api/clients/:slug/style-guide missing client -> 404 and invalid slug -> 400', async () => {
+    const vault = setupVault();
+
+    const missingClient = await withVaultEnv(vault, () =>
+        createAgent().post('/api/clients/missing/style-guide').set(authHeaders()).send({
+            content: 'new brand guide'
+        })
+    );
+    const invalidSlug = await withVaultEnv(vault, () =>
+        createAgent().post('/api/clients/..%2Fx/style-guide').set(authHeaders()).send({
+            content: 'new brand guide'
+        })
+    );
+
+    assert.equal(missingClient.status, 404);
+    assert.equal(invalidSlug.status, 400);
+    assert.equal(existsSync(join(vault, 'clients', '..', 'x', 'style-guide.md')), false);
+});
+
 test('GET /api/scenario-overrides -> 200 + array', async () => {
     const vault = setupVault();
     const overridesDir = join(vault, 'scenario-overrides');
