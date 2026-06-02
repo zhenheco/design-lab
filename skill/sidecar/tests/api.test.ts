@@ -1,5 +1,6 @@
 import { mock, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -125,6 +126,10 @@ function writeClientStyleGuide(vault: string, slug: string, content: string) {
     const clientDir = join(vault, 'clients', slug);
     mkdirSync(clientDir, { recursive: true });
     writeFileSync(join(clientDir, 'style-guide.md'), content);
+}
+
+function hashContent(content: string): string {
+    return createHash('sha256').update(content).digest('hex');
 }
 
 function writeScenarioOverride(vault: string, scenario: string, content: string) {
@@ -430,6 +435,31 @@ test('POST /api/style-guide hash conflict -> 409', async () => {
 
     assert.equal(response.status, 409);
     assert.match(response.body.error, /hash conflict/);
+});
+
+test('POST /api/clients/whatcanido/style-guide existing guide requires matching expectedHash before write', async () => {
+    const vault = setupVault();
+    writeClientMeta(vault, 'whatcanido', { type: 'client' });
+    writeClientStyleGuide(vault, 'whatcanido', 'old brand guide');
+
+    const missingHash = await withVaultEnv(vault, () =>
+        createAgent().post('/api/clients/whatcanido/style-guide').set(authHeaders()).send({
+            content: 'new brand guide'
+        })
+    );
+    assert.equal(missingHash.status, 400);
+    assert.equal(readFileSync(join(vault, 'clients', 'whatcanido', 'style-guide.md'), 'utf8'), 'old brand guide');
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().post('/api/clients/whatcanido/style-guide').set(authHeaders()).send({
+            content: 'new brand guide',
+            expectedHash: hashContent('old brand guide')
+        })
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.contentHash, hashContent('new brand guide'));
+    assert.equal(readFileSync(join(vault, 'clients', 'whatcanido', 'style-guide.md'), 'utf8'), 'new brand guide');
 });
 
 test('GET /api/scenario-overrides -> 200 + array', async () => {

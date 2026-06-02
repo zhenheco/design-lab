@@ -9,7 +9,7 @@ import { clientsRouter } from './routes/clients.ts';
 import { contextRouter } from './routes/context.ts';
 import { feedbackRouter } from './routes/feedback.ts';
 import { scenarioOverridesRouter } from './routes/scenario-overrides.ts';
-import { styleGuideRouter } from './routes/style-guide.ts';
+import { clientStyleGuideRouter, styleGuideRouter } from './routes/style-guide.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -58,6 +58,7 @@ export function createApp(): Express {
     app.use(healthLogMiddleware);
     app.use('/api', requireHostAllowlist);
     app.use('/api', requireTokenForWrites);
+    app.use('/api/clients/:slug/style-guide', clientStyleGuideRouter());
     app.use('/api/clients', clientsRouter());
     app.use('/api/cases', casesRouter());
     app.use('/api/feedback', feedbackRouter());
