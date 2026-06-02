@@ -9,6 +9,12 @@ import {
     assertSafePath
 } from './paths.ts';
 
+export type Aspect = {
+    dimension: string;
+    verdict: 'like' | 'dislike';
+    note: string;
+};
+
 export interface WriteCaseInput {
     client: string;
     slug: string;
@@ -17,6 +23,7 @@ export interface WriteCaseInput {
     quote: string;
     sourceImagePath: string;
     tokens?: Record<string, unknown>;
+    aspects?: Aspect[];
 }
 
 export interface WriteCaseResult {
@@ -93,6 +100,7 @@ export function writeCase(input: WriteCaseInput): WriteCaseResult {
         sentiment: input.sentiment,
         quotes_from_user: [input.quote],
         tokens: input.tokens ?? {},
+        ...(input.aspects && input.aspects.length > 0 ? { aspects: input.aspects } : {}),
         tags: { style: [], mood: [], elements: [], industry: [] },
         related: [],
         lint_skip: []

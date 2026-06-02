@@ -300,6 +300,28 @@ test('tokens default to empty object', () => {
     });
 });
 
+test('frontmatter includes aspectual feedback when provided', () => {
+    const vault = setupVault(['_personal']);
+    const aspects = [
+        { dimension: 'typography', verdict: 'like' as const, note: 'x' },
+        { dimension: 'color', verdict: 'dislike' as const, note: '太冷' }
+    ];
+
+    withVaultEnv(vault, () => {
+        writeCase(
+            makeInput({
+                slug: 'aspectual',
+                aspects
+            })
+        );
+
+        const frontmatter = readFrontmatter(
+            join(vault, 'clients', '_personal', 'cases', 'aspectual.md')
+        );
+        assert.deepEqual(frontmatter.aspects, aspects);
+    });
+});
+
 test('frontmatter includes full schema fields', () => {
     const vault = setupVault(['_personal']);
 
