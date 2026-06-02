@@ -171,7 +171,11 @@ echo "$TASK"
 echo "client=$CLIENT scenario=${SCENARIO:-（未指定）}"
 echo ""
 echo "=== personal-style-guide.md ==="
-cat "$VAULT/personal-style-guide.md"
+if [ -f "$VAULT/personal-style-guide.md" ]; then
+    cat "$VAULT/personal-style-guide.md"
+else
+    echo "(no personal-style-guide.md — 用 ui-ux-pro-max starter)"
+fi
 echo ""
 echo "=== cases/ frontmatter summary ==="
 V_PATH="$VAULT" S_PATH="$SKILL_DIR" node --import tsx --input-type=module -e "
@@ -186,7 +190,7 @@ V_PATH="$VAULT" S_PATH="$SKILL_DIR" node --import tsx --input-type=module -e "
         tags: c.tags,
         palette: c.tokens.palette
     })), null, 2));
-" || exit 1
+" || echo "[design] case summary 載入失敗，略過" >&2
 
 CASE_COUNT=$(find "$VAULT/clients" -path "*/cases/*.md" 2>/dev/null | wc -l | tr -d ' ')
 echo ""

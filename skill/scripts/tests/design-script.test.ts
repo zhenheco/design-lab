@@ -287,4 +287,23 @@ test('design.sh falls back to no-merge memory when context fetch fails', async (
     assert.match(result.stdout, /=== personal-style-guide\.md ===/);
     assert.match(result.stdout, /=== cases\/ frontmatter summary ===/);
     assert.match(result.stdout, /zen-hero/);
+    assert.match(result.stdout, /=== INSTRUCTIONS to Claude ===/);
+});
+
+test('design.sh fallback prints instructions when personal guide is missing', async () => {
+    const fixture = createFixture();
+    const sidecar = await startHealthyContextServer();
+    markSidecarPidHealthy(fixture);
+    rmSync(join(fixture.vault, 'personal-style-guide.md'), { force: true });
+
+    const result = runDesign(fixture, ['做一個 landing hero', 'whatcanido', 'landing'], {
+        DESIGN_LAB_SIDECAR_PORT: String(sidecar.port),
+        DESIGN_LAB_SIDECAR_URL: 'http://127.0.0.1:1'
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stderr, /sidecar 不可用，降級 no-merge 記憶/);
+    assert.match(result.stdout, /=== personal-style-guide\.md ===/);
+    assert.match(result.stdout, /\(no personal-style-guide\.md/);
+    assert.match(result.stdout, /=== INSTRUCTIONS to Claude ===/);
 });
