@@ -19,6 +19,13 @@ export const addCaseInputSchema = {
 
 export type AddCaseArgs = z.infer<z.ZodObject<typeof addCaseInputSchema>>;
 
+export const getContextInputSchema = {
+    client: z.string().optional(),
+    scenario: z.string().optional()
+};
+
+export type GetContextArgs = z.infer<z.ZodObject<typeof getContextInputSchema>>;
+
 export const editStyleGuideInputSchema = {
     brand: z.string().optional(),
     content: z.string(),
@@ -39,6 +46,17 @@ export function buildAddCaseRequest(args: AddCaseArgs): SidecarRequest {
             quote: args.quote,
             sourceImagePath: args.sourceImagePath,
             tokens: args.tokens
+        }
+    };
+}
+
+export function buildGetContextRequest(args: GetContextArgs): SidecarRequest {
+    return {
+        method: 'GET',
+        path: '/api/context',
+        query: {
+            client: args.client,
+            scenario: args.scenario
         }
     };
 }
