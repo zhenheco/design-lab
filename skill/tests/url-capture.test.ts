@@ -4,7 +4,7 @@ import { mkdtemp, stat } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CaptureUrlError, captureUrl, isPrivateOrLoopbackHost } from '../lib/capture/url-capture.ts';
+import { CaptureUrlError, assertPublicHost, captureUrl, isPrivateOrLoopbackHost } from '../lib/capture/url-capture.ts';
 
 async function serveHtml(html: string): Promise<{ url: string; close: () => Promise<void> }> {
     const server = createServer((_req, res) => {
@@ -124,4 +124,47 @@ test('captureUrl blocks private hosts by default and allows them when explicitly
     } finally {
         await fixture.close();
     }
+});
+
+test('assertPublicHost rejects hostnames that resolve to private addresses', async () => {
+    await assert.rejects(
+        () => assertPublicHost('evil.example', { lookup: async () => [{ address: '10.0.0.1' }] }),
+        (error: unknown) =>
+            error instanceof CaptureUrlError &&
+            error.code === 'invalid_url' &&
+            error.message === 'capture host resolves to a private/loopback address'
+    );
+});
+
+test('assertPublicHost accepts hostnames that resolve only to public addresses', async () => {
+    await assert.doesNotReject(() =>
+        assertPublicHost('example.com', { lookup: async () => [{ address: '93.184.216.34' }] })
+    );
+});
+
+test('assertPublicHost skips lookup when private addresses are explicitly allowed', async () => {
+    let called = false;
+
+    await assertPublicHost('evil.example', {
+        allowPrivate: true,
+        lookup: async () => {
+            called = true;
+            return [{ address: '10.0.0.1' }];
+        }
+    });
+
+    assert.equal(called, false);
+});
+
+test('assertPublicHost skips lookup for address literals already handled by URL parsing', async () => {
+    let called = false;
+
+    await assertPublicHost('127.0.0.1', {
+        lookup: async () => {
+            called = true;
+            return [{ address: '127.0.0.1' }];
+        }
+    });
+
+    assert.equal(called, false);
 });

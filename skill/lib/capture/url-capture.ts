@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { lookup as dnsLookup } from 'node:dns/promises';
 import { mkdir } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -25,6 +26,8 @@ export class CaptureUrlError extends Error {
         this.name = 'CaptureUrlError';
     }
 }
+
+export type LookupFn = (hostname: string) => Promise<Array<{ address: string }>>;
 
 function parseIpv4Octets(hostname: string): number[] | null {
     const parts = hostname.split('.');
@@ -92,6 +95,33 @@ export function isPrivateOrLoopbackHost(hostname: string): boolean {
     return false;
 }
 
+export async function assertPublicHost(
+    hostname: string,
+    opts: { allowPrivate?: boolean; lookup?: LookupFn } = {}
+): Promise<void> {
+    if (opts.allowPrivate) {
+        return;
+    }
+
+    if (isIP(hostname)) {
+        return;
+    }
+
+    const lookup = opts.lookup ?? ((host: string) => dnsLookup(host, { all: true }));
+    let records: Array<{ address: string }>;
+    try {
+        records = await lookup(hostname);
+    } catch {
+        throw new CaptureUrlError('failed to resolve capture host', 'invalid_url');
+    }
+
+    for (const { address } of records) {
+        if (isPrivateOrLoopbackHost(address)) {
+            throw new CaptureUrlError('capture host resolves to a private/loopback address', 'invalid_url');
+        }
+    }
+}
+
 function parseHttpUrl(url: string, opts: Pick<CaptureUrlOptions, 'allowPrivate'> = {}): URL {
     let parsed: URL;
     try {
@@ -133,6 +163,7 @@ function normalizeError(error: unknown): Error {
 
 export async function captureUrl(url: string, opts: CaptureUrlOptions = {}): Promise<CaptureUrlResult> {
     const parsedUrl = parseHttpUrl(url, { allowPrivate: opts.allowPrivate });
+    await assertPublicHost(parsedUrl.hostname, { allowPrivate: opts.allowPrivate });
     const outDir = opts.outDir ?? tmpdir();
     await mkdir(outDir, { recursive: true });
 
