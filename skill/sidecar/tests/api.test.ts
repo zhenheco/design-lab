@@ -354,6 +354,24 @@ test('POST /api/feedback valid -> 201 + appends feedback log row', async () => {
     assert.equal(rows[0].user_quote, 'This screen needs more visual contrast.');
 });
 
+test('POST /api/feedback missing signal or user_quote -> 400', async () => {
+    const vault = setupVault();
+
+    const missingSignal = await withVaultEnv(vault, () =>
+        createAgent().post('/api/feedback').set(authHeaders()).send({
+            user_quote: 'This screen needs more visual contrast.'
+        })
+    );
+    const missingQuote = await withVaultEnv(vault, () =>
+        createAgent().post('/api/feedback').set(authHeaders()).send({
+            signal: 'too-muted'
+        })
+    );
+
+    assert.equal(missingSignal.status, 400);
+    assert.equal(missingQuote.status, 400);
+});
+
 test('GET /api/style-guide existing -> 200 + content + contentHash', async () => {
     const vault = setupVault();
     writeFileSync(join(vault, 'personal-style-guide.md'), '# Voice\n\nKeep it sharp.\n');
