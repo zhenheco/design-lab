@@ -11,7 +11,7 @@
     "test": "vitest run && npm run check"
   },
   "dependencies": {
-    "@astrojs/node": "^9",
+    "@astrojs/node": "^10",
     "@astrojs/react": "^4",
     "astro": "^5",
     "react": "^19.0.0",
