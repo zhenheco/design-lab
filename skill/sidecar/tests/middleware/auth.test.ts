@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
 import { createApp } from '../../server.ts';
+import { requireHostAllowlist } from '../../middleware/auth.ts';
 
 const TEST_TOKEN = 'middleware-test-token';
 
@@ -88,12 +89,48 @@ test('GET /api/clients with allowed Host and no token -> 200', async () => {
     assert.equal(response.status, 200);
 });
 
+test('GET /api/clients allows loopback Host on arbitrary ports', async () => {
+    await withTestEnv(async () => {
+        for (const host of ['127.0.0.1:9999', '[::1]:5174', 'localhost:12345']) {
+            const response = await createAgent().get('/api/clients').set('Host', host);
+            assert.equal(response.status, 200, host);
+        }
+    });
+});
+
 test('GET /api/clients with forbidden Host and no token -> 403', async () => {
     const response = await withTestEnv(() =>
         createAgent().get('/api/clients').set('Host', 'evil.com:5174')
     );
 
     assert.equal(response.status, 403);
+});
+
+test('GET /api/clients without Host -> 403', async () => {
+    let statusCode = 0;
+    let body: unknown;
+    let nextCalled = false;
+
+    requireHostAllowlist(
+        { headers: {} } as Parameters<typeof requireHostAllowlist>[0],
+        {
+            status(status: number) {
+                statusCode = status;
+                return this;
+            },
+            json(payload: unknown) {
+                body = payload;
+                return this;
+            }
+        } as Parameters<typeof requireHostAllowlist>[1],
+        () => {
+            nextCalled = true;
+        }
+    );
+
+    assert.equal(statusCode, 403);
+    assert.deepEqual(body, { error: 'forbidden host' });
+    assert.equal(nextCalled, false);
 });
 
 test('POST /api/clients with allowed Host and no token -> 401', async () => {

@@ -91,3 +91,28 @@ test('MCP sidecar client sends write token and rereads it once after a 401', asy
         await server.close();
     }
 });
+
+test('MCP sidecar client builds Host header from DESIGN_LAB_SIDECAR_URL', async () => {
+    let seenHost: string | undefined;
+    const fetchMock = mock.method(globalThis, 'fetch', async (_url: RequestInfo | URL, init?: RequestInit) => {
+        seenHost = (init?.headers as Record<string, string> | undefined)?.Host;
+        return new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+        });
+    });
+
+    try {
+        const result = await withEnv(
+            {
+                DESIGN_LAB_SIDECAR_URL: 'http://127.0.0.1:9999'
+            },
+            () => callSidecar({ method: 'GET', path: '/api/context' })
+        );
+
+        assert.deepEqual(result, { status: 200, json: { ok: true } });
+        assert.equal(seenHost, '127.0.0.1:9999');
+    } finally {
+        fetchMock.mock.restore();
+    }
+});

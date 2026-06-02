@@ -38,13 +38,16 @@ export function readToken(): string | null {
     }
 }
 
+function resolveBaseUrl(): string {
+    return process.env.DESIGN_LAB_SIDECAR_URL ?? SIDECAR_URL;
+}
+
 function isWriteMethod(method: SidecarMethod): boolean {
     return method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
 }
 
 function buildUrl(input: CallSidecarInput): URL {
-    const baseUrl = process.env.DESIGN_LAB_SIDECAR_URL ?? SIDECAR_URL;
-    const url = new URL(input.path, baseUrl);
+    const url = new URL(input.path, resolveBaseUrl());
     for (const [key, value] of Object.entries(input.query ?? {})) {
         if (value !== undefined) {
             url.searchParams.set(key, value);
@@ -56,7 +59,7 @@ function buildUrl(input: CallSidecarInput): URL {
 function buildHeaders(input: CallSidecarInput, token: string | null): HeadersInit {
     const headers: Record<string, string> = {
         Accept: 'application/json',
-        Host: '127.0.0.1:5174'
+        Host: new URL(resolveBaseUrl()).host
     };
 
     if (input.body !== undefined) {

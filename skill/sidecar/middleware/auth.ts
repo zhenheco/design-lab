@@ -27,6 +27,20 @@ function getHostAllowlist(): string[] {
     return cachedHostAllowlist;
 }
 
+function hasHostAllowlistOverride(): boolean {
+    const env = process.env.DESIGN_LAB_HOST_ALLOWLIST;
+    return env !== undefined && env.trim().length > 0;
+}
+
+function isLoopbackHost(host: string): boolean {
+    try {
+        const hostname = new URL(`http://${host}`).hostname.toLowerCase().replace(/^\[|\]$/g, '');
+        return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '::1';
+    } catch {
+        return false;
+    }
+}
+
 function safeEqual(a: string, b: string): boolean {
     const bufA = Buffer.from(a, 'utf-8');
     const bufB = Buffer.from(b, 'utf-8');
@@ -40,7 +54,8 @@ function safeEqual(a: string, b: string): boolean {
 export const requireHostAllowlist: RequestHandler = (req, res, next) => {
     const host = req.headers.host?.toLowerCase();
     const allowlist = getHostAllowlist();
-    if (!host || !allowlist.includes(host)) {
+    const allowedByHost = host && (allowlist.includes(host) || (!hasHostAllowlistOverride() && isLoopbackHost(host)));
+    if (!allowedByHost) {
         res.status(403).json({ error: 'forbidden host' });
         return;
     }
