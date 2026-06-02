@@ -121,6 +121,12 @@ function writeStyleGuide(vault: string, content: string) {
     writeFileSync(join(vault, 'personal-style-guide.md'), content);
 }
 
+function writeClientStyleGuide(vault: string, slug: string, content: string) {
+    const clientDir = join(vault, 'clients', slug);
+    mkdirSync(clientDir, { recursive: true });
+    writeFileSync(join(clientDir, 'style-guide.md'), content);
+}
+
 function writeScenarioOverride(vault: string, scenario: string, content: string) {
     const overridesDir = join(vault, 'scenario-overrides');
     mkdirSync(overridesDir, { recursive: true });
@@ -461,6 +467,24 @@ test('GET /api/context?client=ghost -> unknown client returns null + self union 
     assert.equal(response.body.client, null);
     assert.deepEqual(response.body.retrievedFrom, ['_personal', 'zhenheco']);
     assert.deepEqual(summarizeResponseClients(response.body), ['_personal', 'zhenheco']);
+});
+
+test('GET /api/context?client=whatcanido -> includes per-brand brandStyleGuide and global styleGuide', async () => {
+    const vault = setupVault();
+    seedContextBaseFixture(vault);
+    writeClientMeta(vault, 'whatcanido', { type: 'client' });
+    const globalStyleGuide = '# Personal Style Guide\n\nGlobal design baseline.\n';
+    const brandStyleGuide = '# WhatCanIDo Style Guide\n\nBrand-specific rhythm.\n';
+    writeStyleGuide(vault, globalStyleGuide);
+    writeClientStyleGuide(vault, 'whatcanido', brandStyleGuide);
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().get('/api/context').set(authHeaders()).query({ client: 'whatcanido' })
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.styleGuide, globalStyleGuide);
+    assert.equal(response.body.brandStyleGuide, brandStyleGuide);
 });
 
 test('GET /api/context client+scenario -> scenario filter + override + never rules', async () => {

@@ -27,6 +27,10 @@ export function getStyleGuidePath(): string {
   return join(getVaultPath(), 'personal-style-guide.md');
 }
 
+export function getClientStyleGuidePath(slug: string): string {
+  return join(getClientDir(slug), 'style-guide.md');
+}
+
 export function getScenarioOverridePath(scenario: string): string {
   return join(getVaultPath(), 'scenario-overrides', `${scenario}.md`);
 }

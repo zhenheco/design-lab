@@ -3,7 +3,7 @@ import { Router, type Request } from 'express';
 import { loadCaseSummaries, type CaseSummary } from '../../lib/case-loader.ts';
 import { loadClient, type ClientMeta } from '../../lib/client-loader.ts';
 import { parseRulesFromGuide, type NeverRule } from '../../lib/lint.js';
-import { getScenarioOverridePath, getStyleGuidePath, getVaultPath } from '../../lib/paths.ts';
+import { getClientStyleGuidePath, getScenarioOverridePath, getStyleGuidePath, getVaultPath } from '../../lib/paths.ts';
 
 const TOP_N_POSITIVE = 5;
 
@@ -15,6 +15,7 @@ type ContextQuery = {
 export interface ContextResponse {
     client: ClientMeta | null;
     styleGuide: string;
+    brandStyleGuide: string;
     scenarioOverride: string;
     cases: CaseSummary[];
     antiCases: CaseSummary[];
@@ -33,6 +34,7 @@ export function contextRouter(): Router {
         const clientSlug = typeof req.query.client === 'string' ? req.query.client : undefined;
         const scenario = typeof req.query.scenario === 'string' ? req.query.scenario : undefined;
         const styleGuide = readOptionalFile(getStyleGuidePath());
+        const brandStyleGuide = clientSlug ? readOptionalFile(getClientStyleGuidePath(clientSlug)) : '';
         const scenarioOverride = scenario ? readOptionalFile(getScenarioOverridePath(scenario)) : '';
         const client = clientSlug ? loadClient(clientSlug) : null;
         const allCases = loadCaseSummaries(getVaultPath(), { client: clientSlug, scenario });
@@ -44,6 +46,7 @@ export function contextRouter(): Router {
         res.json({
             client,
             styleGuide,
+            brandStyleGuide,
             scenarioOverride,
             cases,
             antiCases,
