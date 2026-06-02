@@ -1,8 +1,10 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { Router, type Request } from 'express';
 import { aggregateDistill, type DistillResult } from '../../lib/distill/aspect-aggregator.ts';
 import { loadCaseSummaries } from '../../lib/case-loader.ts';
 import { readFeedback } from '../../lib/feedback-log.js';
-import { getVaultPath, isValidSlug } from '../../lib/paths.ts';
+import { parseRulesFromGuide } from '../../lib/lint.js';
+import { getClientStyleGuidePath, getStyleGuidePath, getVaultPath, isValidSlug } from '../../lib/paths.ts';
 
 type DistillParams = {
     brand: string;
@@ -18,6 +20,20 @@ function parseMinSupport(value: unknown): number {
     }
 
     return Number(value);
+}
+
+function readOptionalFile(path: string): string {
+    return existsSync(path) ? readFileSync(path, 'utf8') : '';
+}
+
+function existingNeverRuleIdsForBrand(brand: string): string[] {
+    const ids = new Set<string>();
+    for (const guide of [readOptionalFile(getStyleGuidePath()), readOptionalFile(getClientStyleGuidePath(brand))]) {
+        for (const rule of parseRulesFromGuide(guide)) {
+            ids.add(rule.id);
+        }
+    }
+    return Array.from(ids);
 }
 
 export function distillRouter(): Router {
@@ -39,8 +55,9 @@ export function distillRouter(): Router {
         const vault = getVaultPath();
         const cases = loadCaseSummaries(vault, { client: brand });
         const feedback = readFeedback(vault).filter((entry) => entry.client === brand || entry.client === '_personal');
+        const existingNeverRuleIds = existingNeverRuleIdsForBrand(brand);
 
-        res.json(aggregateDistill({ brand, cases, feedback, minSupport }));
+        res.json(aggregateDistill({ brand, cases, feedback, minSupport, existingNeverRuleIds }));
     });
 
     return router;

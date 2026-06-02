@@ -1056,6 +1056,57 @@ test('GET /api/distill/:brand returns deterministic clusters from scoped cases a
     ]);
 });
 
+test('GET /api/distill/:brand includes existing NEVER rule IDs for inline dedup hints', async () => {
+    const vault = setupVault();
+    writeClientMeta(vault, '_personal', { type: 'self' });
+    writeClientMeta(vault, 'whatcanido', { type: 'client' });
+    writeStyleGuide(
+        vault,
+        [
+            '# Personal Style Guide',
+            '',
+            '## NEVER',
+            '- id: global-a',
+            '  rule: "Global rule A"',
+            '  detector:',
+            '    type: regex',
+            "    pattern: 'global-a'",
+            '    target: css',
+            ''
+        ].join('\n')
+    );
+    writeClientStyleGuide(
+        vault,
+        'whatcanido',
+        [
+            '# WhatCanIDo Style Guide',
+            '',
+            '## NEVER',
+            '- id: brand-b',
+            '  rule: "Brand rule B"',
+            '  detector:',
+            '    type: regex',
+            "    pattern: 'brand-b'",
+            '    target: css',
+            '- id: global-a',
+            '  rule: "Duplicate global rule"',
+            '  detector:',
+            '    type: regex',
+            "    pattern: 'duplicate'",
+            '    target: css',
+            ''
+        ].join('\n')
+    );
+
+    const response = await withVaultEnv(vault, () =>
+        createAgent().get('/api/distill/whatcanido').set('Host', '127.0.0.1:5174')
+    );
+
+    assert.equal(response.status, 200);
+    assert.ok(Array.isArray(response.body.existingNeverRuleIds));
+    assert.deepEqual(response.body.existingNeverRuleIds, ['global-a', 'brand-b']);
+});
+
 test('GET /api/distill/:brand rejects invalid slugs and defaults invalid minSupport', async () => {
     const vault = setupVault();
     writeClientMeta(vault, 'whatcanido', { type: 'client' });

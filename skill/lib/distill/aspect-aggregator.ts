@@ -14,6 +14,7 @@ export interface DistillResult {
     brand: string;
     minSupport: number;
     clusters: DistillCluster[];
+    existingNeverRuleIds: string[];
 }
 
 export interface AggregateInput {
@@ -21,6 +22,7 @@ export interface AggregateInput {
     cases: CaseSummary[];
     feedback: FeedbackEntry[];
     minSupport?: number;
+    existingNeverRuleIds?: string[];
 }
 
 type ClusterDraft = {
@@ -78,8 +80,21 @@ function verdictFromSignal(signal: string): 'like' | 'dislike' | null {
     return null;
 }
 
+function dedupeInOrder(values: string[]): string[] {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const value of values) {
+        if (!seen.has(value)) {
+            seen.add(value);
+            result.push(value);
+        }
+    }
+    return result;
+}
+
 export function aggregateDistill(input: AggregateInput): DistillResult {
     const minSupport = input.minSupport ?? 2;
+    const existingNeverRuleIds = dedupeInOrder(input.existingNeverRuleIds ?? []);
     const drafts = new Map<string, ClusterDraft>();
 
     for (const designCase of input.cases) {
@@ -125,6 +140,7 @@ export function aggregateDistill(input: AggregateInput): DistillResult {
     return {
         brand: input.brand,
         minSupport,
-        clusters
+        clusters,
+        existingNeverRuleIds
     };
 }

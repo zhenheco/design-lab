@@ -41,6 +41,7 @@ test('aggregateDistill groups aspect support by dimension and verdict with minSu
     assert.deepEqual(result, {
         brand: 'whatcanido',
         minSupport: 2,
+        existingNeverRuleIds: [],
         clusters: [
             {
                 dimension: 'color',
@@ -165,6 +166,24 @@ test('aggregateDistill returns empty clusters for a brand with no aspects or fee
     assert.deepEqual(result, {
         brand: 'legacybrand',
         minSupport: 2,
-        clusters: []
+        clusters: [],
+        existingNeverRuleIds: []
     });
+});
+
+test('aggregateDistill returns de-duplicated existing NEVER rule IDs in input order', () => {
+    const withIds = aggregateDistill({
+        brand: 'whatcanido',
+        cases: [],
+        feedback: [],
+        existingNeverRuleIds: ['a', 'b', 'a']
+    });
+    const withoutIds = aggregateDistill({
+        brand: 'whatcanido',
+        cases: [],
+        feedback: []
+    });
+
+    assert.deepEqual(withIds.existingNeverRuleIds, ['a', 'b']);
+    assert.deepEqual(withoutIds.existingNeverRuleIds, []);
 });
