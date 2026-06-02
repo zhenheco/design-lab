@@ -108,3 +108,19 @@ test('aggregateDistill defaults minSupport to 2 and sorts clusters deterministic
         ]
     );
 });
+
+test('aggregateDistill returns empty clusters for a brand with no aspects or feedback', () => {
+    const result = aggregateDistill({
+        brand: 'legacybrand',
+        cases: [
+            caseSummary('legacy-case', [])
+        ],
+        feedback: []
+    });
+
+    assert.deepEqual(result, {
+        brand: 'legacybrand',
+        minSupport: 2,
+        clusters: []
+    });
+});
