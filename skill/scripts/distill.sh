@@ -2,6 +2,7 @@
 # Usage: distill.sh
 # v0.1 STUB: 自動 distill 在 v0.3 才上。
 set -euo pipefail
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 VAULT="${DESIGN_LAB_VAULT_PATH:-$HOME/Documents/CC Cli/design-library}"
 
