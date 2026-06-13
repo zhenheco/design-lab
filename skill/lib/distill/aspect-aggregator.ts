@@ -1,5 +1,6 @@
 import type { CaseSummary } from '../case-loader.ts';
 import type { FeedbackEntry } from '../feedback-log.js';
+import { verdictFromSignal } from './verdict.ts';
 
 export interface DistillCluster {
     dimension: string;
@@ -56,28 +57,6 @@ function getOrCreateCluster(
     const created = { dimension, verdict, caseSlugs: [], feedbackQuotes: [], notes: [] };
     clusters.set(key, created);
     return created;
-}
-
-function verdictFromSignal(signal: string): 'like' | 'dislike' | null {
-    const normalized = signal.toLowerCase();
-    if (
-        normalized.includes('dislike') ||
-        normalized.includes('negative') ||
-        normalized.includes('avoid') ||
-        normalized.includes('bad')
-    ) {
-        return 'dislike';
-    }
-    if (
-        normalized.includes('like') ||
-        normalized.includes('positive') ||
-        normalized.includes('good') ||
-        normalized.includes('prefer')
-    ) {
-        return 'like';
-    }
-
-    return null;
 }
 
 function dedupeInOrder(values: string[]): string[] {
