@@ -2,8 +2,8 @@
 set -euo pipefail
 
 VAULT="${DESIGN_LAB_VAULT_PATH:-$HOME/Documents/CC Cli/design-library}"
-STATE_ROOT="${DESIGN_LAB_STATE_DIR:-$HOME/.claude/state}"
-STATUS_FILE="$STATE_ROOT/design-lab/distill-status.json"
+STATE_PATH="${DESIGN_LAB_STATE_PATH:-$HOME/.claude/state/design-lab}"
+STATUS_FILE="$STATE_PATH/distill-status.json"
 FEEDBACK_LOG="$VAULT/feedback-log.jsonl"
 TASTE_OVERRIDES="$VAULT/taste-overrides.md"
 

@@ -13,7 +13,8 @@ const DRIFT_SCRIPT = join(SKILL_DIR, 'scripts', 'session-start-design-lab-drift-
 type Fixture = {
     root: string;
     vault: string;
-    stateDir: string;
+    statePath: string;
+    legacyStateRoot: string;
 };
 
 let currentFixture: Fixture | null = null;
@@ -21,10 +22,12 @@ let currentFixture: Fixture | null = null;
 function createFixture(): Fixture {
     const root = mkdtempSync(join(tmpdir(), 'dl-drift-test-'));
     const vault = join(root, 'vault');
-    const stateDir = join(root, 'state');
+    const statePath = join(root, 'state', 'design-lab');
+    const legacyStateRoot = join(root, 'legacy-state');
     mkdirSync(vault, { recursive: true });
-    mkdirSync(join(stateDir, 'design-lab'), { recursive: true });
-    currentFixture = { root, vault, stateDir };
+    mkdirSync(statePath, { recursive: true });
+    mkdirSync(join(legacyStateRoot, 'design-lab'), { recursive: true });
+    currentFixture = { root, vault, statePath, legacyStateRoot };
     return currentFixture;
 }
 
@@ -44,8 +47,8 @@ processed_records: ${processed}
 `);
 }
 
-function writeStatus(stateDir: string, payload: object): void {
-    writeFileSync(join(stateDir, 'design-lab/distill-status.json'), `${JSON.stringify(payload)}\n`);
+function writeStatus(statePath: string, payload: object): void {
+    writeFileSync(join(statePath, 'distill-status.json'), `${JSON.stringify(payload)}\n`);
 }
 
 function runDriftCheck(fixture: Fixture) {
@@ -53,7 +56,8 @@ function runDriftCheck(fixture: Fixture) {
         env: {
             ...process.env,
             DESIGN_LAB_VAULT_PATH: fixture.vault,
-            DESIGN_LAB_STATE_DIR: fixture.stateDir
+            DESIGN_LAB_STATE_PATH: fixture.statePath,
+            DESIGN_LAB_STATE_DIR: fixture.legacyStateRoot
         },
         encoding: 'utf8',
         timeout: 5_000
@@ -71,7 +75,7 @@ test('distill drift check prints nothing when feedback, taste overrides, and sta
     const fixture = createFixture();
     writeFeedback(fixture.vault, 2);
     writeTaste(fixture.vault, 2);
-    writeStatus(fixture.stateDir, {
+    writeStatus(fixture.statePath, {
         ok: true,
         last_run_iso: new Date().toISOString(),
         records_in: 2,
@@ -89,7 +93,7 @@ test('distill drift check warns when feedback-log count and processed_records di
     const fixture = createFixture();
     writeFeedback(fixture.vault, 3);
     writeTaste(fixture.vault, 2);
-    writeStatus(fixture.stateDir, {
+    writeStatus(fixture.statePath, {
         ok: true,
         last_run_iso: new Date().toISOString(),
         records_in: 2,
@@ -108,7 +112,7 @@ test('distill drift check warns for failed or stale status', () => {
     const fixture = createFixture();
     writeFeedback(fixture.vault, 1);
     writeTaste(fixture.vault, 1);
-    writeStatus(fixture.stateDir, {
+    writeStatus(fixture.statePath, {
         ok: false,
         last_run_iso: '2026-01-01T00:00:00.000Z',
         error: 'write failed'

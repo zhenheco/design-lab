@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { readFeedback } from '../feedback-log.js';
 import { renderTasteOverrides } from './render-taste-overrides.ts';
 
@@ -19,8 +20,8 @@ function vaultPath(): string {
 }
 
 function statusPath(): string {
-    const stateRoot = process.env.DESIGN_LAB_STATE_DIR ?? join(homedir(), '.claude/state');
-    return join(stateRoot, 'design-lab/distill-status.json');
+    const stateDir = process.env.DESIGN_LAB_STATE_PATH ?? join(homedir(), '.claude/state/design-lab');
+    return join(stateDir, 'distill-status.json');
 }
 
 function writeStatus(payload: StatusPayload): void {
@@ -94,26 +95,33 @@ export function runDistill(): StatusPayload {
     };
 }
 
-try {
-    const status = runDistill();
-    writeStatus(status);
-    process.stdout.write(`design-lab distill ok: records=${status.records_in} drift=${status.drift}\n`);
-} catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const failedStatus: StatusPayload = {
-        ok: false,
-        last_run_iso: new Date().toISOString(),
-        error: message
-    };
+function runCli(): void {
     try {
-        writeStatus(failedStatus);
-    } catch (statusError) {
-        const statusMessage = statusError instanceof Error ? statusError.message : String(statusError);
-        process.stderr.write(`ERROR: design-lab distill failed and status write failed: ${message}; status_error=${statusMessage}\n`);
+        const status = runDistill();
+        writeStatus(status);
+        process.stdout.write(`design-lab distill ok: records=${status.records_in} drift=${status.drift}\n`);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const failedStatus: StatusPayload = {
+            ok: false,
+            last_run_iso: new Date().toISOString(),
+            error: message
+        };
+        try {
+            writeStatus(failedStatus);
+        } catch (statusError) {
+            const statusMessage = statusError instanceof Error ? statusError.message : String(statusError);
+            process.stderr.write(`ERROR: design-lab distill failed and status write failed: ${message}; status_error=${statusMessage}\n`);
+            notifyFailure(message);
+            process.exit(1);
+        }
+        process.stderr.write(`ERROR: design-lab distill failed: ${message}\n`);
         notifyFailure(message);
         process.exit(1);
     }
-    process.stderr.write(`ERROR: design-lab distill failed: ${message}\n`);
-    notifyFailure(message);
-    process.exit(1);
+}
+
+const isEntrypoint = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (isEntrypoint) {
+    runCli();
 }

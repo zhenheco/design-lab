@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 const SKILL_DIR = fileURLToPath(new URL('..', import.meta.url));
 
 function runScript(script, args = '', env = {}) {
@@ -79,6 +79,7 @@ test('E2E: write fake case via case-writer → stats reflects it', async () => {
 test('E2E: distill regenerates taste-overrides from feedback-log and writes healthy status', () => {
     const vault = mkdtempSync(join(tmpdir(), 'dl-e2e-'));
     const stateDir = mkdtempSync(join(tmpdir(), 'dl-state-'));
+    const legacyStateDir = mkdtempSync(join(tmpdir(), 'dl-legacy-state-'));
     runScript('init-library.sh', `"${vault}"`);
 
     const styleGuidePath = join(vault, 'personal-style-guide.md');
@@ -91,7 +92,8 @@ test('E2E: distill regenerates taste-overrides from feedback-log and writes heal
 
     runScript('distill.sh', '', {
         DESIGN_LAB_VAULT_PATH: vault,
-        DESIGN_LAB_STATE_DIR: stateDir
+        DESIGN_LAB_STATE_PATH: stateDir,
+        DESIGN_LAB_STATE_DIR: legacyStateDir
     });
 
     const taste = readFileSync(join(vault, 'taste-overrides.md'), 'utf8');
@@ -103,12 +105,43 @@ test('E2E: distill regenerates taste-overrides from feedback-log and writes heal
     assert.match(taste, /- typography: Use calm hierarchy\./);
     assert.equal(readFileSync(styleGuidePath, 'utf8'), styleGuideBefore);
 
-    const status = JSON.parse(readFileSync(join(stateDir, 'design-lab/distill-status.json'), 'utf8'));
+    const status = JSON.parse(readFileSync(join(stateDir, 'distill-status.json'), 'utf8'));
     assert.equal(status.ok, true);
     assert.equal(status.records_in, 3);
     assert.equal(status.records_out, 3);
     assert.equal(status.drift, 0);
     assert.match(status.last_run_iso, /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(existsSync(join(legacyStateDir, 'design-lab/distill-status.json')), false);
+});
+
+test('E2E: importing run-distill module does not run CLI distill or write status', () => {
+    const vault = mkdtempSync(join(tmpdir(), 'dl-e2e-'));
+    const stateDir = mkdtempSync(join(tmpdir(), 'dl-state-'));
+    const homeDir = mkdtempSync(join(tmpdir(), 'dl-home-'));
+    runScript('init-library.sh', `"${vault}"`);
+    writeFileSync(join(vault, 'feedback-log.jsonl'), `${JSON.stringify({
+        signal: 'manual',
+        verdict: 'like',
+        dimension: 'layout',
+        user_quote: 'calm spacing',
+        derived_rule: 'Use calm spacing.'
+    })}\n`);
+
+    const moduleUrl = pathToFileURL(join(SKILL_DIR, 'lib/distill/run-distill.ts')).href;
+    execFileSync('node', ['--import', 'tsx', '-e', `await import(${JSON.stringify(moduleUrl)})`], {
+        encoding: 'utf8',
+        env: {
+            ...process.env,
+            DESIGN_LAB_VAULT_PATH: vault,
+            DESIGN_LAB_STATE_PATH: stateDir,
+            DESIGN_LAB_STATE_DIR: stateDir,
+            HOME: homeDir
+        }
+    });
+
+    assert.equal(existsSync(join(vault, 'taste-overrides.md')), false);
+    assert.equal(existsSync(join(stateDir, 'distill-status.json')), false);
+    assert.equal(existsSync(join(homeDir, '.claude/state/design-lab/distill-status.json')), false);
 });
 
 test('E2E: distill write failure exits nonzero, writes status, and attempts notification', () => {
@@ -129,13 +162,13 @@ test('E2E: distill write failure exits nonzero, writes status, and attempts noti
     try {
         const error = runScriptFailure('distill.sh', '', {
             DESIGN_LAB_VAULT_PATH: vault,
-            DESIGN_LAB_STATE_DIR: stateDir,
+            DESIGN_LAB_STATE_PATH: stateDir,
             PATH: `${binDir}:${process.env.PATH}`
         });
 
         assert.notEqual(error.status, 0);
         assert.match(String(error.stderr), /ERROR/);
-        const status = JSON.parse(readFileSync(join(stateDir, 'design-lab/distill-status.json'), 'utf8'));
+        const status = JSON.parse(readFileSync(join(stateDir, 'distill-status.json'), 'utf8'));
         assert.equal(status.ok, false);
         assert.match(status.error, /taste-overrides|EACCES|permission/i);
         assert.match(readFileSync(notifyLog, 'utf8'), /design-lab distill failed/);
