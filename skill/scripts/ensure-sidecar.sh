@@ -13,6 +13,8 @@ VAULT="${DESIGN_LAB_VAULT_PATH:-${HOME}/Documents/CC Cli/design-library}"
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_FILE="${TMPDIR:-/tmp}/design-lab-sidecar.log"
 
+source "$SKILL_DIR/scripts/sentry-env.sh"
+
 mkdir -p "$STATE_DIR"
 
 if curl -sf "$HEALTH_URL" > /dev/null 2>&1; then
@@ -84,6 +86,7 @@ TOKEN="$(openssl rand -hex 32)"
 umask 077
 echo "$TOKEN" > "$TOKEN_FILE"
 chmod 600 "$TOKEN_FILE"
+load_sentry_dsn
 
 DESIGN_LAB_VAULT_PATH="$VAULT" DESIGN_LAB_API_TOKEN="$TOKEN" \
 nohup node --import tsx --input-type=module -e "
