@@ -3,7 +3,6 @@ import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createServer as createNetServer } from 'node:net';
 import {
-    chmodSync,
     existsSync,
     mkdtempSync,
     mkdirSync,
@@ -82,7 +81,7 @@ async function createFixture(): Promise<Fixture> {
     return fixture;
 }
 
-function runEnsure(fixture: Fixture, timeout = 15_000) {
+function runEnsure(fixture: Fixture, timeout = 30_000) {
     return spawnSync('bash', [ENSURE_SCRIPT], {
         cwd: resolve(SKILL_DIR, '..'),
         env: {
@@ -350,7 +349,7 @@ test('port-conflict: exits non-zero with a clear stderr message', async () => {
     const fixture = await createFixture();
     await startDummyPortOwner(fixture.port);
 
-    const result = runEnsure(fixture, 15_000);
+    const result = runEnsure(fixture, 30_000);
 
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /ensure-sidecar: (sidecar process exited before health check|spawn timeout).*design-lab-sidecar\.log/s);

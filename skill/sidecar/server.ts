@@ -11,6 +11,7 @@ import { distillRouter } from './routes/distill.ts';
 import { captureRouter } from './routes/capture.ts';
 import { feedbackRouter } from './routes/feedback.ts';
 import { scenarioOverridesRouter } from './routes/scenario-overrides.ts';
+import { createErrorHandler, initSentry } from './sentry.ts';
 import { clientStyleGuideRouter, styleGuideRouter } from './routes/style-guide.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -29,23 +30,7 @@ const healthLogMiddleware: RequestHandler = (req, res, next) => {
     next();
 };
 
-export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
-    if (error instanceof SyntaxError && 'body' in (error as object)) {
-        res.status(400).json({ error: 'invalid JSON' });
-        return;
-    }
-
-    const errType = (error as { type?: string }).type;
-    const errStatus = (error as { status?: number; statusCode?: number }).status
-        ?? (error as { status?: number; statusCode?: number }).statusCode;
-    if (errType === 'entity.too.large' || errStatus === 413) {
-        res.status(413).json({ error: 'payload too large' });
-        return;
-    }
-
-    console.error('[sidecar] 500:', error);
-    res.status(500).json({ error: 'internal server error' });
-};
+export const errorHandler: ErrorRequestHandler = createErrorHandler();
 
 export function createApp(): Express {
     if (!process.env.DESIGN_LAB_API_TOKEN) {
@@ -94,6 +79,7 @@ async function mountDashboard(app: Express): Promise<void> {
 }
 
 export async function startServer(port = 5174, host = '127.0.0.1'): Promise<Server> {
+    initSentry();
     const app = createApp();
     await mountDashboard(app);
     return new Promise((resolve) => {
