@@ -29,6 +29,9 @@ jobs:
       - name: Install dashboard dependencies
         run: npm --prefix skill/dashboard ci
 
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
       - name: Build dashboard
         run: npm --prefix skill/dashboard run build
 
