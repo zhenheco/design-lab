@@ -23,6 +23,7 @@ type ScrubbableEvent = {
     user?: Record<string, unknown>;
     extra?: Record<string, unknown>;
     contexts?: Record<string, unknown>;
+    exception?: Record<string, unknown>;
     breadcrumbs?: Array<Record<string, unknown>>;
     [key: string]: unknown;
 };
@@ -39,6 +40,8 @@ type CaptureSidecarException = (
 
 const sensitiveKeyPattern = /(authorization|cookie|token|secret|password|passwd|api[-_]?key|dsn|session)/i;
 const sensitiveHeaderKeys = new Set(['cf-connecting-ip', 'x-forwarded-for', 'x-real-ip']);
+const localFilesystemPathPattern = /(?:\/(?:Users|Volumes|private|var|tmp|home)\/[^\s"'`<>),;]+|[A-Za-z]:[\\/][^\s"'`<>),;]+)/;
+const localFilesystemPathReplacePattern = /(?:\/(?:Users|Volumes|private|var|tmp|home)\/[^\s"'`<>),;]+|[A-Za-z]:[\\/][^\s"'`<>),;]+)/g;
 
 let sentryInitialized = false;
 
@@ -95,6 +98,7 @@ export function scrubSentryEvent<T extends ScrubbableEvent>(event: T): T {
 
     scrubbed.extra = scrubRecord(event.extra);
     scrubbed.contexts = scrubRecord(event.contexts);
+    scrubbed.exception = scrubException(event.exception);
 
     const breadcrumbs = event.breadcrumbs
         ?.filter((breadcrumb) => !breadcrumbHasSecrets(breadcrumb))
@@ -139,7 +143,7 @@ export function createErrorHandler(
             return;
         }
 
-        void Promise.resolve(capture(error, { method: req.method, path: req.path })).catch((captureError) => {
+        void Promise.resolve().then(() => capture(error, { method: req.method, path: req.path })).catch((captureError) => {
             console.error('[sidecar] sentry capture failed:', captureError);
         });
         console.error('[sidecar] 500:', error);
@@ -196,6 +200,58 @@ function scrubRecord(record: Record<string, unknown> | undefined): Record<string
     return Object.keys(kept).length ? kept : undefined;
 }
 
+function scrubException(exception: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+    if (!exception) {
+        return undefined;
+    }
+
+    const scrubbed = { ...exception };
+    if (Array.isArray(exception.values)) {
+        scrubbed.values = exception.values.map(scrubExceptionValue);
+    }
+    return scrubbed;
+}
+
+function scrubExceptionValue(value: unknown): unknown {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return value;
+    }
+
+    const scrubbed: Record<string, unknown> = { ...(value as Record<string, unknown>) };
+    if (typeof scrubbed.value === 'string') {
+        scrubbed.value = redactLocalFilesystemPaths(scrubbed.value);
+    }
+    if (scrubbed.stacktrace && typeof scrubbed.stacktrace === 'object' && !Array.isArray(scrubbed.stacktrace)) {
+        scrubbed.stacktrace = scrubStacktrace(scrubbed.stacktrace as Record<string, unknown>);
+    }
+    return scrubRecord(scrubbed) ?? {};
+}
+
+function scrubStacktrace(stacktrace: Record<string, unknown>): Record<string, unknown> {
+    const scrubbed = { ...stacktrace };
+    if (Array.isArray(stacktrace.frames)) {
+        scrubbed.frames = stacktrace.frames.map(scrubStackFrame);
+    }
+    return scrubbed;
+}
+
+function scrubStackFrame(frame: unknown): unknown {
+    if (!frame || typeof frame !== 'object' || Array.isArray(frame)) {
+        return frame;
+    }
+
+    const scrubbed: Record<string, unknown> = { ...(frame as Record<string, unknown>) };
+    delete scrubbed.abs_path;
+    delete scrubbed.vars;
+    delete scrubbed.context_line;
+    delete scrubbed.pre_context;
+    delete scrubbed.post_context;
+    if (typeof scrubbed.filename === 'string') {
+        scrubbed.filename = redactLocalFilesystemPaths(scrubbed.filename);
+    }
+    return scrubRecord(scrubbed) ?? {};
+}
+
 function scrubValue(value: unknown): unknown {
     if (Array.isArray(value)) {
         return value.map(scrubValue).filter((item) => item !== undefined);
@@ -216,7 +272,7 @@ function breadcrumbHasSecrets(breadcrumb: Record<string, unknown>): boolean {
 
 function valueHasSecret(value: unknown): boolean {
     if (typeof value === 'string') {
-        return sensitiveKeyPattern.test(value) || looksLikeLocalFilesystemPath(value);
+        return sensitiveKeyPattern.test(value) || containsLocalFilesystemPath(value);
     }
     if (Array.isArray(value)) {
         return value.some(valueHasSecret);
@@ -229,8 +285,10 @@ function valueHasSecret(value: unknown): boolean {
     return false;
 }
 
-function looksLikeLocalFilesystemPath(value: string): boolean {
-    const trimmed = value.trim();
-    return /^\/(?:Users|Volumes|private|var|tmp|home)\//.test(trimmed)
-        || /^[A-Za-z]:[\\/]/.test(trimmed);
+function containsLocalFilesystemPath(value: string): boolean {
+    return localFilesystemPathPattern.test(value.trim());
+}
+
+function redactLocalFilesystemPaths(value: string): string {
+    return value.replace(localFilesystemPathReplacePattern, '[local-path]');
 }

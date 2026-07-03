@@ -12,10 +12,12 @@ import {
 test('sidecar declares and wires the Node Sentry SDK', () => {
     const pkg = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')) as {
         dependencies?: Record<string, string>;
+        engines?: Record<string, string>;
     };
     const server = readFileSync(resolve(process.cwd(), 'skill/sidecar/server.ts'), 'utf8');
 
     assert.ok(pkg.dependencies?.['@sentry/node']);
+    assert.equal(pkg.engines?.node, '>=20.6.0');
     assert.match(server, new RegExp(String.raw`from ['"]\./sentry\.ts['"]`));
     assert.match(server, new RegExp(String.raw`initSentry\(`));
     assert.match(server, new RegExp(String.raw`createErrorHandler\(`));
@@ -92,6 +94,45 @@ test('scrubSentryEvent removes request, user, extra, and breadcrumb PII', () => 
     assert.equal(scrubbed.breadcrumbs, undefined);
 });
 
+test('scrubSentryEvent redacts local paths from exception values and frames', () => {
+    const scrubbed = scrubSentryEvent({
+        exception: {
+            values: [
+                {
+                    type: 'Error',
+                    value: 'captured image path not allowed: /var/folders/example/capture.png',
+                    stacktrace: {
+                        frames: [
+                            {
+                                function: 'captureRoute',
+                                filename: '/Users/example/design-lab/skill/sidecar/routes/capture.ts',
+                                abs_path: '/Users/example/design-lab/skill/sidecar/routes/capture.ts',
+                                context_line: 'throw new Error(secretPath)',
+                                pre_context: ['const secretPath = "/Users/example/private.png";'],
+                                post_context: ['next(secretPath);']
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    }) as {
+        exception?: {
+            values?: Array<{
+                value?: string;
+                stacktrace?: { frames?: Array<Record<string, unknown>> };
+            }>;
+        };
+    };
+
+    const exception = scrubbed.exception?.values?.[0];
+    assert.equal(exception?.value, 'captured image path not allowed: [local-path]');
+    assert.deepEqual(exception?.stacktrace?.frames?.[0], {
+        function: 'captureRoute',
+        filename: '[local-path]'
+    });
+});
+
 test('createErrorHandler captures unhandled sidecar 500s without changing the response', async () => {
     const captured: unknown[] = [];
     const handler = createErrorHandler(async (error) => {
@@ -114,6 +155,30 @@ test('createErrorHandler captures unhandled sidecar 500s without changing the re
     await Promise.resolve();
 
     assert.deepEqual(captured, [error]);
+    assert.equal(response.statusCode, 500);
+    assert.deepEqual(response.body, { error: 'internal server error' });
+});
+
+test('createErrorHandler still returns 500 when telemetry capture throws synchronously', async () => {
+    const handler = createErrorHandler(() => {
+        throw new Error('sentry client failed');
+    });
+    const error = new Error('route exploded');
+    const response: { statusCode?: number; body?: unknown } = {};
+    const res = {
+        status(code: number) {
+            response.statusCode = code;
+            return this;
+        },
+        json(body: unknown) {
+            response.body = body;
+            return this;
+        }
+    };
+
+    handler(error, { method: 'GET', path: '/api/context' } as never, res as never, (() => undefined) as never);
+    await Promise.resolve();
+
     assert.equal(response.statusCode, 500);
     assert.deepEqual(response.body, { error: 'internal server error' });
 });
