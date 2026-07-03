@@ -103,6 +103,7 @@ function runDaemon(fixture: Fixture, extraEnv: Record<string, string> = {}) {
             DESIGN_LAB_VAULT_PATH: fixture.vault,
             PATH: `${fixture.binDir}:${process.env.PATH ?? ''}`,
             CAPTURED_ENV_FILE: fixture.capturedEnvFile,
+            SENTRY_OP_READ_TIMEOUT_SECONDS: '5',
             ...extraEnv
         },
         encoding: 'utf8',

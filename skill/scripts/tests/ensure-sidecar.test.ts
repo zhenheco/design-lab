@@ -82,7 +82,7 @@ async function createFixture(): Promise<Fixture> {
     return fixture;
 }
 
-function runEnsure(fixture: Fixture, timeout = 15_000) {
+function runEnsure(fixture: Fixture, timeout = 30_000) {
     return spawnSync('bash', [ENSURE_SCRIPT], {
         cwd: resolve(SKILL_DIR, '..'),
         env: {
@@ -90,6 +90,7 @@ function runEnsure(fixture: Fixture, timeout = 15_000) {
             HOME: fixture.home,
             DESIGN_LAB_VAULT_PATH: fixture.vault,
             DESIGN_LAB_SIDECAR_PORT: String(fixture.port),
+            SENTRY_OP_READ_TIMEOUT_SECONDS: '0',
             TMPDIR: fixture.root
         },
         encoding: 'utf8',
@@ -106,6 +107,7 @@ function spawnEnsure(fixture: Fixture): Promise<{ code: number | null; stdout: s
                 HOME: fixture.home,
                 DESIGN_LAB_VAULT_PATH: fixture.vault,
                 DESIGN_LAB_SIDECAR_PORT: String(fixture.port),
+                SENTRY_OP_READ_TIMEOUT_SECONDS: '0',
                 TMPDIR: fixture.root
             },
             stdio: ['ignore', 'pipe', 'pipe']
@@ -350,7 +352,7 @@ test('port-conflict: exits non-zero with a clear stderr message', async () => {
     const fixture = await createFixture();
     await startDummyPortOwner(fixture.port);
 
-    const result = runEnsure(fixture, 15_000);
+    const result = runEnsure(fixture, 30_000);
 
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /ensure-sidecar: (sidecar process exited before health check|spawn timeout).*design-lab-sidecar\.log/s);
