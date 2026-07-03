@@ -30,6 +30,7 @@ type Fixture = {
     pidFile: string;
     tokenFile: string;
     lockDir: string;
+    binDir: string;
 };
 
 let currentFixture: Fixture | null = null;
@@ -63,9 +64,11 @@ async function createFixture(): Promise<Fixture> {
     const root = mkdtempSync(join(tmpdir(), 'dl-ensure-test-'));
     const home = join(root, 'home');
     const vault = join(root, 'vault');
+    const binDir = join(root, 'bin');
     const port = await getEphemeralPort();
     const stateDir = join(home, '.claude', 'state', 'design-lab');
     mkdirSync(join(vault, 'clients'), { recursive: true });
+    mkdirSync(binDir, { recursive: true });
     mkdirSync(home, { recursive: true });
 
     const fixture = {
@@ -76,10 +79,38 @@ async function createFixture(): Promise<Fixture> {
         stateDir,
         pidFile: join(stateDir, 'sidecar.pid'),
         tokenFile: join(stateDir, 'api-token'),
-        lockDir: join(stateDir, 'spawn.lock')
+        lockDir: join(stateDir, 'spawn.lock'),
+        binDir
     };
+    installFakeNode(fixture);
     currentFixture = fixture;
     return fixture;
+}
+
+function installFakeNode(fixture: Fixture) {
+    const nodePath = join(fixture.binDir, 'node');
+    writeFileSync(
+        nodePath,
+        `#!/usr/bin/env bash
+set -euo pipefail
+exec "$REAL_NODE_PATH" -e '
+const http = require("node:http");
+const port = Number(process.env.DESIGN_LAB_SIDECAR_PORT || 5174);
+const server = http.createServer((req, res) => {
+  if (req.url && req.url.startsWith("/api/health")) {
+    res.writeHead(200, {"content-type": "application/json"});
+    res.end(JSON.stringify({ok: true}));
+    return;
+  }
+  res.writeHead(404);
+  res.end();
+});
+server.listen(port, "127.0.0.1");
+process.on("SIGTERM", () => server.close(() => process.exit(0)));
+'
+`
+    );
+    chmodSync(nodePath, 0o755);
 }
 
 function runEnsure(fixture: Fixture, timeout = 30_000) {
@@ -91,6 +122,8 @@ function runEnsure(fixture: Fixture, timeout = 30_000) {
             DESIGN_LAB_VAULT_PATH: fixture.vault,
             DESIGN_LAB_SIDECAR_PORT: String(fixture.port),
             SENTRY_OP_READ_TIMEOUT_SECONDS: '0',
+            PATH: `${fixture.binDir}:${process.env.PATH ?? ''}`,
+            REAL_NODE_PATH: process.execPath,
             TMPDIR: fixture.root
         },
         encoding: 'utf8',
@@ -108,6 +141,8 @@ function spawnEnsure(fixture: Fixture): Promise<{ code: number | null; stdout: s
                 DESIGN_LAB_VAULT_PATH: fixture.vault,
                 DESIGN_LAB_SIDECAR_PORT: String(fixture.port),
                 SENTRY_OP_READ_TIMEOUT_SECONDS: '0',
+                PATH: `${fixture.binDir}:${process.env.PATH ?? ''}`,
+                REAL_NODE_PATH: process.execPath,
                 TMPDIR: fixture.root
             },
             stdio: ['ignore', 'pipe', 'pipe']

@@ -5,7 +5,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "test": "node --test --test-concurrency=4 --import tsx \"skill/tests/**/*.test.{js,ts}\" \"skill/sidecar/tests/**/*.test.ts\" \"skill/scripts/tests/**/*.test.ts\"",
+    "test": "node --test --import tsx \"skill/tests/**/*.test.{js,ts}\" \"skill/sidecar/tests/**/*.test.ts\" \"skill/scripts/tests/**/*.test.ts\"",
     "test:dashboard": "cd skill/dashboard && npm test",
     "test:e2e": "node --test --import tsx \"skill/tests/dashboard-e2e.test.js\"",
     "deploy": "bash deploy.sh"
