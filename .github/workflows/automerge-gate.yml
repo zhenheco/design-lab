@@ -1,0 +1,42 @@
+name: Automerge Gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  automerge-gate:
+    name: automerge-gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            skill/dashboard/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install dashboard dependencies
+        run: npm --prefix skill/dashboard ci
+
+      - name: Build dashboard
+        run: npm --prefix skill/dashboard run build
+
+      - name: Run root tests
+        run: npm test
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Run dashboard tests
+        run: npm run test:dashboard
