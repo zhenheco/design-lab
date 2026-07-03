@@ -70,7 +70,8 @@ test('scrubSentryEvent removes request, user, extra, and breadcrumb PII', () => 
         },
         extra: {
             vaultPath: '/Users/example/design-library',
-            apiToken: 'secret'
+            apiToken: 'secret',
+            route: '/api/context'
         },
         breadcrumbs: [
             {
@@ -87,7 +88,7 @@ test('scrubSentryEvent removes request, user, extra, and breadcrumb PII', () => 
     assert.equal(scrubbed.request?.data, undefined);
     assert.deepEqual(scrubbed.request?.headers, { accept: 'application/json' });
     assert.deepEqual(scrubbed.user, { id: 'local-user' });
-    assert.deepEqual(scrubbed.extra, { vaultPath: '/Users/example/design-library' });
+    assert.deepEqual(scrubbed.extra, { route: '/api/context' });
     assert.equal(scrubbed.breadcrumbs, undefined);
 });
 

@@ -216,7 +216,7 @@ function breadcrumbHasSecrets(breadcrumb: Record<string, unknown>): boolean {
 
 function valueHasSecret(value: unknown): boolean {
     if (typeof value === 'string') {
-        return sensitiveKeyPattern.test(value);
+        return sensitiveKeyPattern.test(value) || looksLikeLocalFilesystemPath(value);
     }
     if (Array.isArray(value)) {
         return value.some(valueHasSecret);
@@ -227,4 +227,10 @@ function valueHasSecret(value: unknown): boolean {
         ));
     }
     return false;
+}
+
+function looksLikeLocalFilesystemPath(value: string): boolean {
+    const trimmed = value.trim();
+    return /^\/(?:Users|Volumes|private|var|tmp|home)\//.test(trimmed)
+        || /^[A-Za-z]:[\\/]/.test(trimmed);
 }
