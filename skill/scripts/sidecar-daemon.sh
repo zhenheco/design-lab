@@ -8,8 +8,6 @@ TOKEN_FILE="${STATE_DIR}/api-token"
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VAULT="${DESIGN_LAB_VAULT_PATH:-${HOME}/Documents/CC Cli/design-library}"
 
-source "$SKILL_DIR/scripts/sentry-env.sh"
-
 ensure_token() {
     mkdir -p "$STATE_DIR"
 
@@ -34,7 +32,6 @@ ensure_token
 read -r DESIGN_LAB_API_TOKEN < "$TOKEN_FILE"
 export DESIGN_LAB_API_TOKEN
 export DESIGN_LAB_VAULT_PATH="$VAULT"
-load_sentry_dsn
 
 # launchd 啟動時 cwd=/，需切到 repo root 讓 `node --import tsx` 解析到 node_modules/tsx
 cd "${SKILL_DIR}/.." || exit 1

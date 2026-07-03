@@ -70,17 +70,6 @@ set -euo pipefail
 `);
 }
 
-function installFakeOp(fixture: Fixture, dsn = 'https://public@example.invalid/44') {
-    writeExecutable(join(fixture.binDir, 'op'), `#!/usr/bin/env bash
-set -euo pipefail
-if [ "\${1:-}" = "read" ] && [ "\${2:-}" = "op://Dev/Sentry DSN design-lab-sidecar/credential" ]; then
-  printf '%s\\n' "${dsn}"
-  exit 0
-fi
-exit 2
-`);
-}
-
 function runEnsureToken(fixture: Fixture) {
     return spawnSync('bash', [DAEMON_SCRIPT, '--ensure-token-only'], {
         cwd: resolve(SKILL_DIR, '..'),
@@ -103,7 +92,6 @@ function runDaemon(fixture: Fixture, extraEnv: Record<string, string> = {}) {
             DESIGN_LAB_VAULT_PATH: fixture.vault,
             PATH: `${fixture.binDir}:${process.env.PATH ?? ''}`,
             CAPTURED_ENV_FILE: fixture.capturedEnvFile,
-            SENTRY_OP_READ_TIMEOUT_SECONDS: '5',
             ...extraEnv
         },
         encoding: 'utf8',
@@ -141,24 +129,9 @@ test('ensure-token: reuses an existing non-empty token without rotation', () => 
     assert.equal((statSync(fixture.tokenFile).mode & 0o777).toString(8), '600');
 });
 
-test('sidecar-daemon loads Sentry DSN from 1Password when no explicit DSN is set', () => {
+test('sidecar-daemon preserves an externally provided Sentry DSN', () => {
     const fixture = createFixture();
     installFakeNode(fixture);
-    installFakeOp(fixture);
-
-    const result = runDaemon(fixture, { SENTRY_DSN: '' });
-
-    assert.equal(result.status, 0, result.stderr);
-    const capturedEnv = readFileSync(fixture.capturedEnvFile, 'utf8');
-    assert.match(capturedEnv, /^SENTRY_DSN=https:\/\/public@example\.invalid\/44$/m);
-    assert.match(capturedEnv, /^DESIGN_LAB_API_TOKEN=[a-f0-9]{64}$/m);
-    assert.match(capturedEnv, new RegExp(`^DESIGN_LAB_VAULT_PATH=${fixture.vault}$`, 'm'));
-});
-
-test('sidecar-daemon preserves an explicitly provided Sentry DSN', () => {
-    const fixture = createFixture();
-    installFakeNode(fixture);
-    installFakeOp(fixture, 'https://public@example.invalid/from-op');
 
     const result = runDaemon(fixture, {
         SENTRY_DSN: 'https://public@example.invalid/manual'
@@ -167,4 +140,17 @@ test('sidecar-daemon preserves an explicitly provided Sentry DSN', () => {
     assert.equal(result.status, 0, result.stderr);
     const capturedEnv = readFileSync(fixture.capturedEnvFile, 'utf8');
     assert.match(capturedEnv, /^SENTRY_DSN=https:\/\/public@example\.invalid\/manual$/m);
+    assert.match(capturedEnv, /^DESIGN_LAB_API_TOKEN=[a-f0-9]{64}$/m);
+    assert.match(capturedEnv, new RegExp(`^DESIGN_LAB_VAULT_PATH=${fixture.vault}$`, 'm'));
+});
+
+test('sidecar-daemon leaves Sentry disabled when no DSN is provided', () => {
+    const fixture = createFixture();
+    installFakeNode(fixture);
+
+    const result = runDaemon(fixture, { SENTRY_DSN: '' });
+
+    assert.equal(result.status, 0, result.stderr);
+    const capturedEnv = readFileSync(fixture.capturedEnvFile, 'utf8');
+    assert.match(capturedEnv, /^SENTRY_DSN=$/m);
 });

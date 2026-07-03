@@ -12,15 +12,6 @@ HEALTH_URL="http://127.0.0.1:${PORT}/api/health"
 VAULT="${DESIGN_LAB_VAULT_PATH:-${HOME}/Documents/CC Cli/design-library}"
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_FILE="${TMPDIR:-/tmp}/design-lab-sidecar.log"
-HEALTH_WAIT_ATTEMPTS="${DESIGN_LAB_SIDECAR_HEALTH_ATTEMPTS:-40}"
-
-case "$HEALTH_WAIT_ATTEMPTS" in
-    ''|*[!0-9]*)
-        HEALTH_WAIT_ATTEMPTS=40
-        ;;
-esac
-
-source "$SKILL_DIR/scripts/sentry-env.sh"
 
 mkdir -p "$STATE_DIR"
 
@@ -93,7 +84,6 @@ TOKEN="$(openssl rand -hex 32)"
 umask 077
 echo "$TOKEN" > "$TOKEN_FILE"
 chmod 600 "$TOKEN_FILE"
-load_sentry_dsn
 
 DESIGN_LAB_VAULT_PATH="$VAULT" DESIGN_LAB_API_TOKEN="$TOKEN" \
 nohup node --import tsx --input-type=module -e "
@@ -103,7 +93,7 @@ startServer(Number(process.env.DESIGN_LAB_SIDECAR_PORT || 5174), '127.0.0.1').ca
 SIDECAR_PID=$!
 echo "$SIDECAR_PID" > "$PID_FILE"
 
-for _ in $(seq 1 "$HEALTH_WAIT_ATTEMPTS"); do
+for _ in $(seq 1 20); do
     if curl -sf "$HEALTH_URL" > /dev/null 2>&1; then
         exit 0
     fi
@@ -117,5 +107,5 @@ for _ in $(seq 1 "$HEALTH_WAIT_ATTEMPTS"); do
     sleep 0.5
 done
 
-echo "ensure-sidecar: spawn timeout; see $LOG_FILE" >&2
+echo "ensure-sidecar: spawn timeout (10s); see $LOG_FILE" >&2
 exit 1

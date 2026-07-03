@@ -21,13 +21,12 @@ test('sidecar declares and wires the Node Sentry SDK', () => {
     assert.match(server, new RegExp(String.raw`createErrorHandler\(`));
 });
 
-test('sidecar launchers load the Sentry DSN before spawning the runtime', () => {
+test('sidecar launchers leave the Sentry DSN as externally provided env', () => {
     const ensureSidecar = readFileSync(resolve(process.cwd(), 'skill/scripts/ensure-sidecar.sh'), 'utf8');
     const sidecarDaemon = readFileSync(resolve(process.cwd(), 'skill/scripts/sidecar-daemon.sh'), 'utf8');
 
     for (const launcher of [ensureSidecar, sidecarDaemon]) {
-        assert.match(launcher, /source "\$SKILL_DIR\/scripts\/sentry-env\.sh"/);
-        assert.match(launcher, /load_sentry_dsn/);
+        assert.doesNotMatch(launcher, /op:\/\/|op read|load_sentry_dsn|sentry-env/);
     }
 });
 

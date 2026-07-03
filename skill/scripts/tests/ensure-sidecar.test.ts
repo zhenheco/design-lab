@@ -121,7 +121,6 @@ function runEnsure(fixture: Fixture, timeout = 30_000) {
             HOME: fixture.home,
             DESIGN_LAB_VAULT_PATH: fixture.vault,
             DESIGN_LAB_SIDECAR_PORT: String(fixture.port),
-            SENTRY_OP_READ_TIMEOUT_SECONDS: '0',
             PATH: `${fixture.binDir}:${process.env.PATH ?? ''}`,
             REAL_NODE_PATH: process.execPath,
             TMPDIR: fixture.root
@@ -140,7 +139,6 @@ function spawnEnsure(fixture: Fixture): Promise<{ code: number | null; stdout: s
                 HOME: fixture.home,
                 DESIGN_LAB_VAULT_PATH: fixture.vault,
                 DESIGN_LAB_SIDECAR_PORT: String(fixture.port),
-                SENTRY_OP_READ_TIMEOUT_SECONDS: '0',
                 PATH: `${fixture.binDir}:${process.env.PATH ?? ''}`,
                 REAL_NODE_PATH: process.execPath,
                 TMPDIR: fixture.root
