@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
+    chmodSync,
     existsSync,
     mkdtempSync,
     mkdirSync,
@@ -24,6 +25,8 @@ type Fixture = {
     vault: string;
     stateDir: string;
     tokenFile: string;
+    binDir: string;
+    capturedEnvFile: string;
 };
 
 let currentFixture: Fixture | null = null;
@@ -33,7 +36,9 @@ function createFixture(): Fixture {
     const home = join(root, 'home');
     const vault = join(root, 'vault');
     const stateDir = join(home, '.claude', 'state', 'design-lab');
+    const binDir = join(root, 'bin');
     mkdirSync(join(vault, 'clients'), { recursive: true });
+    mkdirSync(binDir, { recursive: true });
     mkdirSync(home, { recursive: true });
 
     const fixture = {
@@ -41,10 +46,28 @@ function createFixture(): Fixture {
         home,
         vault,
         stateDir,
-        tokenFile: join(stateDir, 'api-token')
+        tokenFile: join(stateDir, 'api-token'),
+        binDir,
+        capturedEnvFile: join(root, 'captured-env')
     };
     currentFixture = fixture;
     return fixture;
+}
+
+function writeExecutable(path: string, contents: string) {
+    writeFileSync(path, contents);
+    chmodSync(path, 0o755);
+}
+
+function installFakeNode(fixture: Fixture) {
+    writeExecutable(join(fixture.binDir, 'node'), `#!/usr/bin/env bash
+set -euo pipefail
+{
+  printf 'SENTRY_DSN=%s\\n' "\${SENTRY_DSN:-}"
+  printf 'DESIGN_LAB_API_TOKEN=%s\\n' "\${DESIGN_LAB_API_TOKEN:-}"
+  printf 'DESIGN_LAB_VAULT_PATH=%s\\n' "\${DESIGN_LAB_VAULT_PATH:-}"
+} > "$CAPTURED_ENV_FILE"
+`);
 }
 
 function runEnsureToken(fixture: Fixture) {
@@ -54,6 +77,22 @@ function runEnsureToken(fixture: Fixture) {
             ...process.env,
             HOME: fixture.home,
             DESIGN_LAB_VAULT_PATH: fixture.vault
+        },
+        encoding: 'utf8',
+        timeout: 5_000
+    });
+}
+
+function runDaemon(fixture: Fixture, extraEnv: Record<string, string> = {}) {
+    return spawnSync('bash', [DAEMON_SCRIPT], {
+        cwd: resolve(SKILL_DIR, '..'),
+        env: {
+            ...process.env,
+            HOME: fixture.home,
+            DESIGN_LAB_VAULT_PATH: fixture.vault,
+            PATH: `${fixture.binDir}:${process.env.PATH ?? ''}`,
+            CAPTURED_ENV_FILE: fixture.capturedEnvFile,
+            ...extraEnv
         },
         encoding: 'utf8',
         timeout: 5_000
@@ -88,4 +127,30 @@ test('ensure-token: reuses an existing non-empty token without rotation', () => 
     assert.equal(result.status, 0, result.stderr);
     assert.equal(readFileSync(fixture.tokenFile, 'utf8'), 'stable-token\n');
     assert.equal((statSync(fixture.tokenFile).mode & 0o777).toString(8), '600');
+});
+
+test('sidecar-daemon preserves an externally provided Sentry DSN', () => {
+    const fixture = createFixture();
+    installFakeNode(fixture);
+
+    const result = runDaemon(fixture, {
+        SENTRY_DSN: 'https://public@example.invalid/manual'
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    const capturedEnv = readFileSync(fixture.capturedEnvFile, 'utf8');
+    assert.match(capturedEnv, /^SENTRY_DSN=https:\/\/public@example\.invalid\/manual$/m);
+    assert.match(capturedEnv, /^DESIGN_LAB_API_TOKEN=[a-f0-9]{64}$/m);
+    assert.match(capturedEnv, new RegExp(`^DESIGN_LAB_VAULT_PATH=${fixture.vault}$`, 'm'));
+});
+
+test('sidecar-daemon leaves Sentry disabled when no DSN is provided', () => {
+    const fixture = createFixture();
+    installFakeNode(fixture);
+
+    const result = runDaemon(fixture, { SENTRY_DSN: '' });
+
+    assert.equal(result.status, 0, result.stderr);
+    const capturedEnv = readFileSync(fixture.capturedEnvFile, 'utf8');
+    assert.match(capturedEnv, /^SENTRY_DSN=$/m);
 });
