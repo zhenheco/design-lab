@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@astrojs/node": "^11",
-    "@astrojs/react": "^4",
+    "@astrojs/react": "^6",
     "astro": "^7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
@@ -26,10 +26,10 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^4.7.0",
+    "@vitejs/plugin-react": "^6.0.3",
     "jsdom": "^25.0.1",
     "tailwindcss": "^4",
     "typescript": "^5.6.0",
-    "vitest": "^2.1.9"
+    "vitest": "^4.1.9"
   }
 }
